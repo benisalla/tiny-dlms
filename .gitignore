@@ -6,3 +6,9 @@ __pycache__/
 .env
 checkpoints/
 data/babi/raw/
+# rebuilt by scripts/prepare_data.py (each row lists every option: ~85 MB)
+data/raw/
+data/clinc150/
+data/banking77/
+data/csqa/
+data/pretrain/

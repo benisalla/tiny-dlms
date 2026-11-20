@@ -1,7 +1,7 @@
 import torch
 
 from conftest import load_script
-from tiny_dlm import WordTokenizer, collate, load_csv, make_chunks, mask_tokens
+from tiny_dlm import Decision, WordTokenizer, collate, load_csv, make_chunks, mask_tokens
 
 
 def test_tokenizer_round_trip_and_unknown_words(tokenizer):
@@ -82,3 +82,35 @@ def test_make_chunks_respects_block_size(tokenizer):
     chunks = make_chunks([text], tokenizer, block_size=32)
     assert all(len(c) <= 32 and c[0] == tokenizer.cls_id for c in chunks)
     assert sum(len(c) - 1 for c in chunks) == 160  # nothing lost
+
+
+def test_sample_candidates_keeps_the_answers_and_caps_the_options():
+    import random
+    from tiny_dlm.data import sample_candidates
+    d = Decision("which intent", [f"intent {i}" for i in range(151)], ["intent 42"])
+    for seed in range(20):
+        s = sample_candidates(d, 16, random.Random(seed))
+        assert len(s.candidates) == 16 and "intent 42" in s.candidates
+        assert len(set(s.candidates)) == 16 and set(s.candidates) <= set(d.candidates)
+    assert sample_candidates(d, 0) is d  # 0 = keep all
+
+
+def test_multitask_batch_comes_from_one_dataset(tokenizer, decisions):
+    import random
+    from tiny_dlm.data import get_multitask_batch
+    two = [d for d in decisions if len(d.candidates) == 2]
+    many = [d for d in decisions if len(d.candidates) > 2]
+    seen = set()
+    for seed in range(30):
+        idx, cand_mask, targets = get_multitask_batch({"two": two, "many": many}, 8, tokenizer, "cpu",
+                                                      random.Random(seed))
+        seen.add(idx.shape[1])
+        assert torch.allclose(targets.sum(-1), torch.ones(len(targets)))
+    assert seen == {2, 4}  # both datasets are used, and a batch is never padded to the other one's size
+
+
+def test_tokenizer_min_freq_keeps_option_words():
+    from tiny_dlm import WordTokenizer
+    tok = WordTokenizer.from_texts(["the cat sat", "the dog sat"], min_freq=2, keep=["apple pay"])
+    assert "the" in tok.stoi and "sat" in tok.stoi and "cat" not in tok.stoi  # seen once -> <unk>
+    assert "apple" in tok.stoi and "pay" in tok.stoi  # option words are always kept

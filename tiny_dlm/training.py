@@ -37,11 +37,15 @@ def estimate_loss(model, get_batch_fns, eval_iters):
 
 
 @torch.no_grad()
-def accuracy(model, decisions, tokenizer, device, batch_size=64):
-    """Top-1 accuracy: how often the most likely candidate is one of the correct answers."""
+def accuracy(model, decisions, tokenizer, device, max_sequences=4096):
+    """
+    Top-1 accuracy with ALL the options of every decision: how often the most likely one is a correct answer.
+    Batches hold at most `max_sequences` (context, option) sequences: 4096 = 64 bAbI decisions or 27 CLINC150 ones.
+    """
     was_training = model.training
     model.eval()
     correct = 0
+    batch_size = min(64, max(1, max_sequences // max(len(d.candidates) for d in decisions)))
     for i in range(0, len(decisions), batch_size):
         idx, cand_mask, targets = collate(decisions[i:i + batch_size], tokenizer, device)
         choice, _ = model.decide(idx, cand_mask)

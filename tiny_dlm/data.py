@@ -73,9 +73,40 @@ def collate(decisions, tokenizer, device="cpu"):
     return idx.to(device), cand_mask.to(device), targets.to(device)
 
 
-def get_batch(decisions, batch_size, tokenizer, device, rng=random):
+def sample_candidates(decision, max_candidates, rng=random):
+    """
+        Keep every right answer plus random wrong options, at most `max_candidates` in total (0 -> keep all).
+        Used for training only: CLINC150 has 151 options, and each one is a full pass through the encoder.
+        The model never sees a fixed list, so it still works with all 151 at test time (no layer depends on K).
+
+            "translate | transfer | weather | ... (151)"   ->   "weather | translate | pay bill | ... (16)"
+    """
+    if not max_candidates or len(decision.candidates) <= max_candidates:
+        return decision
+    wrong = [c for c in decision.candidates if c not in decision.answers]
+    n_wrong = max(1, max_candidates - len(decision.answers))
+    candidates = list(decision.answers) + rng.sample(wrong, min(n_wrong, len(wrong)))
+    rng.shuffle(candidates)  # the right answer must not always be first (the candidate layer ignores order anyway)
+    return Decision(decision.context, candidates, decision.answers)
+
+
+def get_batch(decisions, batch_size, tokenizer, device, rng=random, max_candidates=0):
     """A random batch of decisions: (idx, cand_mask, targets)."""
-    return collate(rng.sample(decisions, min(batch_size, len(decisions))), tokenizer, device)
+    batch = rng.sample(decisions, min(batch_size, len(decisions)))
+    return collate([sample_candidates(d, max_candidates, rng) for d in batch], tokenizer, device)
+
+
+def get_multitask_batch(datasets, batch_size, tokenizer, device, rng=random, max_candidates=0):
+    """
+        Several datasets, one model: pick ONE dataset (in proportion to its size), then a batch from it.
+        One dataset per batch keeps the batch rectangle small (a bAbI decision padded to 151 options would waste
+        ~30x the compute). Over many steps the model sees every dataset.
+
+        datasets: {"clinc150": [Decision, ...], "csqa": [...], ...}
+    """
+    names = list(datasets)
+    name = rng.choices(names, weights=[len(datasets[n]) for n in names])[0]
+    return get_batch(datasets[name], batch_size, tokenizer, device, rng, max_candidates)
 
 
 # ---------------------------------------------------------------- pre-training (masked words)

@@ -301,6 +301,29 @@ STAGE 2 · fine-tuning · data/babi/train.csv (context, candidates, answers)
   tensors: idx (B, K, T) · cand_mask (B, K) · targets (B, K)
 ```
 
+## More data: many options, one model (`scripts/prepare_data.py`)
+
+bAbI has only 2 to 6 options. To really test a decision model, three more datasets use the same CSV format:
+
+| Dataset | Options per decision | What is decided | Example | License |
+|---|---|---|---|---|
+| [CLINC150](https://github.com/clinc/oos-eval) | **151** | the intent of a request (150 + "out of scope") | "how do i say thank you in french" → `translate` | CC BY 3.0 |
+| [Banking77](https://github.com/PolyAI-LDN/task-specific-datasets) | **77** | a banking customer's intent | "i am still waiting on my card ?" → `card arrival` | CC BY 4.0 |
+| [CommonsenseQA](https://www.tau-nlp.sites.tau.ac.il/commonsenseqa) | 5 | the commonsense answer | "where would you find a seafood restaurant in the east coast ... ?" → `maine` | MIT |
+
+```bash
+python scripts/prepare_data.py                                   # download + build data/{clinc150,banking77,csqa,pretrain}
+python scripts/train.py --data_dir data/pretrain                 # stage 1 on all the texts (~1M words, no answers)
+python scripts/finetune.py --tasks babi,clinc150,banking77,csqa  # stage 2: ONE model, every dataset
+```
+
+- **One model, every dataset.** Every decision is "context + options -> pick one", so the datasets mix freely. Each
+  batch comes from one dataset, picked in proportion to its size (no bAbI decision padded to 151 options).
+- **151 options are expensive**, because each option is its own pass through the encoder. Training keeps the right answer plus
+  random wrong options (`--max_train_candidates 16`). Accuracy is always measured with **all** the options.
+- **Vocabulary:** words seen at least twice in the pre-training text (`--min_freq 2`), plus every word that appears
+  in an option (`data/pretrain/options.txt`), so a possible answer is never `<unk>`.
+
 ## Run it
 
 ```bash
@@ -326,7 +349,7 @@ Every config field is a flag: `--n_layer 4 --n_embd 128 --max_iters 5000 --learn
 
 ## Results
 
-Not trained to the end yet (the development machine is a small CPU; full training is meant for the notebook on a GPU).
+Not trained to the end yet.
 
 **Sanity checks** (`scripts/sanity_check.py`, on the real bAbI data): 12/12 pass. Initial loss = random guessing
 (1.315 vs mean log K 1.320; 4.90 vs log vocab 5.02), every parameter gets a gradient, decisions in a batch do not

@@ -6,6 +6,7 @@ It knows nothing about decisions yet; that is stage 2 (scripts/finetune.py).
 
     python scripts/prepare_babi.py           # builds data/babi/pretrain_*.txt and data/babi/*.csv
     python scripts/train.py                  # -> checkpoints/pretrain.pt
+    python scripts/train.py --data_dir data/pretrain     # all datasets (scripts/prepare_data.py)
     python scripts/train.py --n_layer 4 --n_embd 128 --max_iters 3000
     python scripts/train.py --norm_type layernorm --pos_encoding learned --gated_mlp false --activation gelu_tanh
                                              # GPT-2 style blocks instead of Llama style
@@ -30,7 +31,10 @@ def main(argv=None):
     # connect to dataset
     train_texts = load_text(os.path.join(cfg.data_dir, "pretrain_train.txt"))
     val_texts = load_text(os.path.join(cfg.data_dir, "pretrain_val.txt"))
-    tokenizer = WordTokenizer.from_texts(train_texts)  # the vocabulary is fixed here, fine-tuning reuses it
+    # the vocabulary is fixed here and fine-tuning reuses it. Option words (options.txt) are always kept.
+    options_path = os.path.join(cfg.data_dir, "options.txt")
+    options = load_text(options_path) if os.path.exists(options_path) else []
+    tokenizer = WordTokenizer.from_texts(train_texts, min_freq=cfg.min_freq, keep=options)
     train_chunks = make_chunks(train_texts, tokenizer, model_cfg.block_size)
     val_chunks = make_chunks(val_texts, tokenizer, model_cfg.block_size)
 

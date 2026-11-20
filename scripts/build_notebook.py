@@ -65,6 +65,7 @@ import time
 import random
 import urllib.parse
 import urllib.request
+from collections import Counter
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, fields
 
@@ -200,7 +201,7 @@ else:
 md("#####Tokenizer (word level, built from the data)")
 code(constants("tiny_dlm/tokenizer.py", "PAD", "SPECIALS") + "\n\n\n" + source("tiny_dlm/tokenizer.py", "WordTokenizer"))
 md("#####Data Loader")
-code(source("tiny_dlm/data.py", "Decision", "load_csv", "all_texts", "collate", "get_batch"))
+code(source("tiny_dlm/data.py", "Decision", "load_csv", "all_texts", "collate", "sample_candidates", "get_batch"))
 md("> pre-training batches: BERT masking (80% `[MASK]`, 10% random word, 10% unchanged)")
 code(source("tiny_dlm/data.py", "load_text", "make_chunks", "mask_tokens", "get_mlm_batch"))
 code("""

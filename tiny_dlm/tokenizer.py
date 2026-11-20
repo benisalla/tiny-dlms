@@ -1,5 +1,6 @@
 """A word-level tokenizer, built from the training data (no download, no Hugging Face)."""
 import re
+from collections import Counter
 
 PAD, UNK, CLS, SEP, MASK = "<pad>", "<unk>", "<cls>", "<sep>", "<mask>"
 SPECIALS = [PAD, UNK, CLS, SEP, MASK]  # always ids 0, 1, 2, 3, 4
@@ -23,8 +24,13 @@ class WordTokenizer:
         self.pad_id, self.unk_id, self.cls_id, self.sep_id, self.mask_id = (self.stoi[t] for t in SPECIALS)
 
     @classmethod
-    def from_texts(cls, texts):
-        words = {w for text in texts for w in cls.split(text)}
+    def from_texts(cls, texts, min_freq=1, keep=()):
+        """
+        The vocabulary: every word seen at least `min_freq` times in `texts`, plus every word of `keep`
+        (the option texts: a word that can be an answer must never become <unk>, however rare it is).
+        """
+        counts = Counter(w for text in texts for w in cls.split(text))
+        words = {w for w, n in counts.items() if n >= min_freq} | {w for text in keep for w in cls.split(text)}
         return cls(SPECIALS + sorted(words - set(SPECIALS)))  # sorted -> same ids every run
 
     @staticmethod

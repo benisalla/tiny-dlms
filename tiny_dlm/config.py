@@ -75,6 +75,14 @@ class TrainConfig:
 
     # data
     data_dir: str = "./data/babi"  # pretrain_{train,val}.txt for pre-training, {train,val,test}.csv for fine-tuning
+    # fine-tuning on several datasets at once: "babi,clinc150,banking77,csqa" -> data_root/<name>/{train,val,test}.csv
+    # ("" -> only data_dir). Each batch comes from one dataset, picked at random in proportion to its size.
+    tasks: str = ""
+    data_root: str = "./data"
+    # fine-tuning: keep the right answer(s) + random wrong options, at most this many per decision (0 -> all).
+    # CLINC150 has 151 options: 16 per decision trains ~10x faster, and evaluation still uses all of them.
+    max_train_candidates: int = 16
+    min_freq: int = 2  # pre-training: words seen fewer times become <unk> (option words are always kept)
     mask_prob: float = 0.15  # pre-training: fraction of words hidden for the model to guess
     batch_size: int = 32  # decisions per micro-batch
     grad_accum_steps: int = 1  # micro-batches per optimizer step

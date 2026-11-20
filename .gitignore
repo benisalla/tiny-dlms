@@ -12,3 +12,5 @@ data/clinc150/
 data/banking77/
 data/csqa/
 data/pretrain/
+# recorded by scripts/car_record.py (~300 MB of frames)
+data/car/

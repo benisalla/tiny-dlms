@@ -11,8 +11,12 @@ The checks (the classic "make sure the network can learn at all" list):
     data      1. every answer is one of its candidates, every input fits in block_size
               2. no test / val context also appears in the training set (no leak)
               3. val / test words are known to the tokenizer (few <unk>)
+              3b. look at the data: one input decoded back to words, exactly as the network gets it
     model     4. loss at init = loss of random guessing   (decisions: mean log K, words: log vocab)
-              5. every parameter gets a non-zero gradient   (nothing is disconnected)
+              5. every parameter gets a finite, non-zero gradient   (nothing is disconnected)
+              5b. activations stay healthy from block to block (no explosion, no dead layer)
+              5c. one optimizer step moves the weights by a sane amount (learning rate not absurd)
+              5d. the same seed gives the same loss
               6. decisions in a batch do not leak into each other (padding of K and T changes nothing)
               7. shuffling the candidates only shuffles the probabilities
               8. any number of candidates works: 2, 3, 7, 10 -> probabilities sum to 1
@@ -32,14 +36,9 @@ from tiny_dlm.checkpoint import load_checkpoint, save_checkpoint
 from tiny_dlm.config import ModelConfig
 from tiny_dlm.data import Decision, all_texts, collate, load_csv, load_text, make_chunks, mask_tokens
 from tiny_dlm.model import TinyDLM
+from tiny_dlm import sanity
+from tiny_dlm.sanity import check
 from tiny_dlm.tokenizer import WordTokenizer
-
-RESULTS = []
-
-
-def check(name, ok, detail=""):
-    RESULTS.append(ok)
-    print(f"  [{'PASS' if ok else 'FAIL'}] {name}" + (f"  ({detail})" if detail else ""))
 
 
 def build_model(tokenizer, block_size, **overrides):
@@ -49,31 +48,17 @@ def build_model(tokenizer, block_size, **overrides):
     return TinyDLM(ModelConfig(**args))
 
 
-def overfit(model, batch, steps, lr=3e-3, target=0.05):
-    """Train on ONE fixed batch. A working network must drive the loss to ~0."""
-    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.0)
-    model.train()
-    for step in range(1, steps + 1):
-        _, loss = model(*batch)
-        opt.zero_grad(set_to_none=True)
-        loss.backward()
-        opt.step()
-        if loss.item() < target:
-            return loss.item(), step
-    return loss.item(), steps
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data_dir", default="data/babi")
     parser.add_argument("--block_size", type=int, default=128)
-    parser.add_argument("--threads", type=int, default=2, help="CPU threads (keep it low on a small machine)")
+    parser.add_argument("--threads", type=int, default=2, help="CPU threads used by the checks")
     parser.add_argument("--seed", type=int, default=2000)
     args = parser.parse_args(argv)
     torch.set_num_threads(args.threads)
     torch.manual_seed(args.seed)
     rng = random.Random(args.seed)
-    RESULTS.clear()
+    sanity.RESULTS.clear()
 
     # ------------------------------------------------------------------ data
     print("data")
@@ -102,6 +87,8 @@ def main(argv=None):
     words = [w for d in val + test for w in tokenizer.split(d.context + " " + " ".join(d.candidates))]
     unk = sum(w not in tokenizer.stoi for w in words) / max(1, len(words))
     check("3. val/test words are known to the tokenizer", unk < 0.01, f"{unk:.2%} unknown, vocab {len(tokenizer)}")
+    shown = collate(train[:1], tokenizer)[0][0, 0].tolist()
+    print(f"  [LOOK] 3b. one input exactly as the network gets it: {' '.join(tokenizer.itos[i] for i in shown)}")
 
     # ------------------------------------------------------------------ model
     print("model")
@@ -128,8 +115,15 @@ def main(argv=None):
     if texts:  # mlm_head is only used by pre-training (it is tied to wte anyway)
         model(mlm[0], None, mlm[1])[1].backward()
     dead = [n for n, p in model.named_parameters() if p.grad is None or p.grad.abs().sum() == 0]
-    check("5. every parameter gets a gradient", not dead, f"no gradient: {dead}" if dead else
+    finite = all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None)
+    check("5. every parameter gets a gradient", not dead and finite, f"no gradient: {dead}" if dead else
           f"{sum(1 for _ in model.parameters())} tensors, {model.get_num_params() / 1e3:.1f}K params")
+    model.zero_grad(set_to_none=True)
+    run = lambda m: m(*batch)  # noqa: E731
+    sanity.check_activations("5b. activations stay healthy", model, model.transformer.h, run)
+    sanity.check_update_ratio("5c. one optimizer step moves the weights a sane amount", model, run)
+    sanity.check_reproducible("5d. the same seed gives the same loss",
+                              lambda: build_model(tokenizer, args.block_size), run)
 
     model.eval()
     one = [d for d in train if len(d.candidates) == 2][0]
@@ -168,7 +162,7 @@ def main(argv=None):
     for pool in ("candidate", "cls"):
         torch.manual_seed(args.seed)
         m = build_model(tokenizer, args.block_size, pool=pool)
-        final, steps = overfit(m, small_batch, steps=300, target=floor + 0.05)
+        final, steps = sanity.overfit(m, lambda m: m(*small_batch), steps=300, target=floor + 0.05)
         m.eval()
         with torch.no_grad():
             choice = m(*small_batch[:2])[0].argmax(-1)
@@ -184,7 +178,7 @@ def main(argv=None):
         torch.manual_seed(args.seed)
         m = build_model(tokenizer, args.block_size)
         fixed = mask_tokens(chunks[:8], tokenizer, rng=rng)
-        final, steps = overfit(m, (fixed[0], None, fixed[1]), steps=300, target=0.05)
+        final, steps = sanity.overfit(m, lambda m: m(fixed[0], None, fixed[1]), steps=300, target=0.05)
         check("10. memorise 8 masked-word examples", final < 0.05, f"loss {final:.3f} after {steps} steps")
 
     # ------------------------------------------------------------------ pipeline
@@ -198,9 +192,7 @@ def main(argv=None):
             same = torch.equal(model(*batch[:2])[0], loaded(*batch[:2])[0])
     check("11. save -> load gives the same outputs", same and tok2.itos == tokenizer.itos)
 
-    n_fail = RESULTS.count(False)
-    print(f"\n{len(RESULTS) - n_fail}/{len(RESULTS)} checks passed" + ("" if n_fail == 0 else "  <-- fix before training"))
-    return n_fail == 0
+    return sanity.summary()
 
 
 if __name__ == "__main__":

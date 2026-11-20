@@ -8,6 +8,7 @@ dependencies = ["torch>=2"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+car = ["gymnasium[box2d]>=1.0", "pillow"]  # CarRacing (Box2D) and GIFs
 
 [build-system]
 requires = ["setuptools>=68"]

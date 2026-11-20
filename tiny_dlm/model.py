@@ -76,7 +76,8 @@ class TinyDLM(nn.Module):
             h=nn.ModuleList([EBlock(config, use_positions=False) for _ in range(config.n_cand_layer)]),
             ln_f=build_norm(config),
         ))
-        self.score_head = nn.Linear(config.n_embd, 1, bias=True)
+        # no bias: adding the same number to every option's score does not change the softmax, it could never learn
+        self.score_head = nn.Linear(config.n_embd, 1, bias=False)
 
         # pre-training head: predict the hidden (masked) words, like BERT
         self.mlm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)

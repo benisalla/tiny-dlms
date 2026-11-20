@@ -324,6 +324,36 @@ python scripts/finetune.py --tasks babi,clinc150,banking77,csqa  # stage 2: ONE 
 - **Vocabulary:** words seen at least twice in the pre-training text (`--min_freq 2`), plus every word that appears
   in an option (`data/pretrain/options.txt`), so a possible answer is never `<unk>`.
 
+## Decisions from images: a car that drives itself (`tiny_dlm/vision.py`, `tiny_dlm/car.py`)
+
+The same judge, but the context is a **camera image** instead of words. `ImageDLM` cuts the frame into patches
+(like a ViT) and reads `[patches] [SEP] option` with the same encoder blocks, candidate layer and score head:
+
+```
+48x48 frame -> 36 patches of 8x8 ─┐
+                                   ├─ [p1 ... p36] [SEP] steer slight left and accelerate -> EBlocks -> score  ┐
+                                   ├─ [p1 ... p36] [SEP] go straight and accelerate       -> EBlocks -> score  ├─ softmax
+                                   └─ ... 15 options                                                           ┘
+```
+
+The environment is [CarRacing](https://gymnasium.farama.org/environments/box2d/car_racing/) (Gymnasium). The car
+wants a continuous action; **"how much left or right" is written in the options**: 7 steering amounts (full / medium /
+slight left, straight, slight / medium / full right) x {accelerate, coast} + brake = **15 options**.
+
+- **Teacher:** a pure-pursuit driver that uses the track's waypoints (the model never sees them). Rounded to the 15
+  options it scores ~915 (900 = "solved").
+- **Data:** the teacher drives 40 tracks. It sometimes steers a notch too far on purpose, but every frame is labelled with
+  what the teacher *would* do, so the student learns how to come back to the road (DART, Laskey et al. 2017).
+- **Test:** the model drives alone, from pixels, on tracks it never saw (seeds 1000+).
+
+```bash
+pip install -e ".[car]"
+python scripts/car_record.py          # teacher drives 40 + 5 tracks -> data/car/{train,val}.pt (~35k frames)
+python scripts/car_sanity_check.py    # 11 health checks + a picture of the data, before training
+python scripts/car_train.py           # -> checkpoints/car.pt
+python scripts/car_drive.py --gif docs/assets/car.gif   # drive new tracks: model vs teacher vs straight vs random
+```
+
 ## Run it
 
 ```bash

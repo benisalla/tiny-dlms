@@ -39,7 +39,7 @@ def test_sanity_checks_pass_on_toy_data(data_dir):
     scripts/sanity_check.py on the small test data. Its val/test sets are copies of train on purpose,
     so the leak check (check 2) must fail, and every other check must pass.
     """
-    sanity = load_script("sanity_check")
-    sanity.main(["--data_dir", str(data_dir), "--block_size", "32"])
-    assert sanity.RESULTS[1] is False  # the leak is caught
-    assert all(sanity.RESULTS[:1] + sanity.RESULTS[2:])
+    from tiny_dlm.sanity import RESULTS
+    load_script("sanity_check").main(["--data_dir", str(data_dir), "--block_size", "32"])
+    assert RESULTS[1] is False  # the leak is caught
+    assert all(RESULTS[:1] + RESULTS[2:])

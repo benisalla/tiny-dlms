@@ -46,30 +46,32 @@ def collate(decisions, tokenizer, device="cpu"):
 
         Tensor          Type            Shape
         ===========================================================================
-        idx             long            (batch_size, max_candidates, max_seq_len)
-        cand_mask       bool            (batch_size, max_candidates)
-        targets         float           (batch_size, max_candidates)
+        b decisions, k = the most options of any decision in the batch, s = the longest sequence
+
+        idx             long            (b, k, s)
+        cand_mask       bool            (b, k)
+        targets         float           (b, k)
         ===========================================================================
 
         Empty candidate slots (a decision with fewer candidates than the largest one in the batch)
         hold a lone [CLS] token, never an all-padding row, which would leave attention nothing to look at.
         Targets are uniform over the correct answers: one right answer -> 1.0, two -> 0.5 each.
     """
-    B = len(decisions)
-    K = max(len(d.candidates) for d in decisions)
+    b = len(decisions)
+    k = max(len(d.candidates) for d in decisions)
     seqs = [[tokenizer.encode_pair(d.context, c) for c in d.candidates] for d in decisions]
-    T = max(len(s) for row in seqs for s in row)
+    s = max(len(seq) for row in seqs for seq in row)
 
-    idx = torch.full((B, K, T), tokenizer.pad_id, dtype=torch.long)
+    idx = torch.full((b, k, s), tokenizer.pad_id, dtype=torch.long)
     idx[:, :, 0] = tokenizer.cls_id
-    cand_mask = torch.zeros(B, K, dtype=torch.bool)
-    targets = torch.zeros(B, K)
-    for b, d in enumerate(decisions):
-        for k, (cand, seq) in enumerate(zip(d.candidates, seqs[b])):
-            idx[b, k, :len(seq)] = torch.tensor(seq)
-            cand_mask[b, k] = True
-            targets[b, k] = float(cand in d.answers)
-        targets[b] /= targets[b].sum()
+    cand_mask = torch.zeros(b, k, dtype=torch.bool)
+    targets = torch.zeros(b, k)
+    for n, d in enumerate(decisions):  # n: decision number, j: option number
+        for j, (option, seq) in enumerate(zip(d.candidates, seqs[n])):
+            idx[n, j, :len(seq)] = torch.tensor(seq)
+            cand_mask[n, j] = True
+            targets[n, j] = float(option in d.answers)
+        targets[n] /= targets[n].sum()
     return idx.to(device), cand_mask.to(device), targets.to(device)
 
 
@@ -127,7 +129,7 @@ def make_chunks(texts, tokenizer, block_size):
     chunks = []
     for text in texts:
         ids = tokenizer.encode(text)
-        chunks += [[tokenizer.cls_id] + ids[i:i + n] for i in range(0, len(ids), n)]
+        chunks += [[tokenizer.cls_id] + ids[start:start + n] for start in range(0, len(ids), n)]
     return chunks
 
 
@@ -139,25 +141,27 @@ def mask_tokens(chunks, tokenizer, mask_prob=0.15, rng=random):
 
         Tensor          Type            Shape
         ===========================================================================
-        idx             long            (batch_size, max_len)   the input, with masks
-        targets         long            (batch_size, max_len)   original id where picked, -1 elsewhere
+        b chunks, s = the longest chunk in tokens
+
+        idx             long            (b, s)          the input, with masks
+        targets         long            (b, s)          original id where picked, -1 elsewhere
         ===========================================================================
     """
-    T = max(len(c) for c in chunks)
-    idx = torch.full((len(chunks), T), tokenizer.pad_id, dtype=torch.long)
-    targets = torch.full((len(chunks), T), -1, dtype=torch.long)
+    s = max(len(c) for c in chunks)  # the longest chunk, in tokens
+    idx = torch.full((len(chunks), s), tokenizer.pad_id, dtype=torch.long)
+    targets = torch.full((len(chunks), s), -1, dtype=torch.long)
     first_word = len(SPECIALS)  # random replacements are real words, never special tokens
-    for b, chunk in enumerate(chunks):
-        idx[b, :len(chunk)] = torch.tensor(chunk)
-        positions = list(range(1, len(chunk)))  # never mask [CLS]
-        picked = [p for p in positions if rng.random() < mask_prob] or [rng.choice(positions)]
-        for p in picked:
-            targets[b, p] = chunk[p]
+    for n, chunk in enumerate(chunks):  # n: row number, m: token position
+        idx[n, :len(chunk)] = torch.tensor(chunk)
+        positions = list(range(1, len(chunk)))  # never mask [CLS] at m = 0
+        picked = [m for m in positions if rng.random() < mask_prob] or [rng.choice(positions)]
+        for m in picked:
+            targets[n, m] = chunk[m]
             r = rng.random()
             if r < 0.8:
-                idx[b, p] = tokenizer.mask_id
+                idx[n, m] = tokenizer.mask_id
             elif r < 0.9:
-                idx[b, p] = rng.randrange(first_word, len(tokenizer))
+                idx[n, m] = rng.randrange(first_word, len(tokenizer))
     return idx, targets
 
 

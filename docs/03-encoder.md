@@ -6,21 +6,21 @@ The encoder is the "reading" part. It is a stack of Transformer blocks, like GPT
 **every word can look at every other word, before and after it** (bidirectional), like BERT.
 
 ```
-INPUT   idx   (N, T)          token ids        N = number of sequences, T = tokens
-OUTPUT  h     (N, T, n_embd)  one vector per token, which now "knows" about the whole sequence
+INPUT   idx   (b, s)          token ids        b = number of sequences, s = tokens per sequence
+OUTPUT  H     (b, s, e)       one vector of size e per token, which now "knows" about the whole sequence
 ```
 
 ## Inside
 
 ```mermaid
 flowchart TB
-    IDX["token ids (N, T)"] --> WTE["wte: token embedding<br/>(vocab, n_embd)"]
+    IDX["token ids (b, s)"] --> WTE["wte: token embedding<br/>(vocab, e)"]
     WTE --> DROP["dropout"]
     DROP --> B1["EBlock 1"]
     B1 --> B2["EBlock 2"]
     B2 --> BN["... × n_layer"]
     BN --> LNF["ln_f: final norm"]
-    LNF --> H["vectors (N, T, n_embd)"]
+    LNF --> H["vectors (b, s, e)"]
 ```
 
 There is no position vector added at the input: positions come from **RoPE**, inside attention
@@ -32,13 +32,13 @@ Pre-norm, like GPT-2 and every model after it. Two steps, each with a shortcut (
 
 ```mermaid
 flowchart TB
-    X["x (N, T, n_embd)"] --> N1["norm"] --> ATT["self-attention<br/>(communication: tokens talk)"]
+    X["X (b, s, e)"] --> N1["norm"] --> ATT["self-attention<br/>(communication: tokens talk)"]
     ATT --> ADD1(("+"))
     X --> ADD1
     ADD1 --> N2["norm"] --> MLP["MLP<br/>(computation: each token thinks alone)"]
     MLP --> ADD2(("+"))
     ADD1 --> ADD2
-    ADD2 --> Y["x (N, T, n_embd)"]
+    ADD2 --> Y["X (b, s, e)"]
 ```
 
 ```python
@@ -70,13 +70,13 @@ GPT / tiny-llm (causal)                         TinyDLM (bidirectional + padding
 The attention itself (`tiny_dlm/attention.py`):
 
 ```
-x (N, T, n_embd) ──c_attn──▶ q, k, v ──split into n_head heads──▶ (N, n_head, T, head_dim)
+X (b, s, e) ──c_attn──▶ Q, K, V ──split into nh heads of size h──▶ (b, nh, s, h)     e = nh × h
                               │
-                     RoPE rotates q and k (position information)
+                     RoPE rotates Q and K by theta[m, i] = m / base^(2i/h)   (m position, i pair)
                               │
-          softmax(q · kᵀ / √head_dim  + mask) · v        ◀── F.scaled_dot_product_attention
+          softmax(Q · Kᵀ / √h  + mask) · V        ◀── F.scaled_dot_product_attention
                               │
-               heads put back together ──c_proj──▶ (N, T, n_embd)
+               heads put back together ──c_proj──▶ (b, s, e)
 ```
 
 ## MLP
@@ -84,9 +84,9 @@ x (N, T, n_embd) ──c_attn──▶ q, k, v ──split into n_head heads─�
 Applied to each token on its own. The default is **SwiGLU** (Llama): a gate decides how much of each feature passes.
 
 ```
-classic (GPT-2):   x ──c_fc──▶ GELU ──c_proj──▶ out
-SwiGLU (default):  x ──c_gate──▶ SiLU ─┐
-                   x ──c_fc────────────×──c_proj──▶ out
+classic (GPT-2):   X ──c_fc──▶ GELU ──c_proj──▶ out
+SwiGLU (default):  X ──c_gate──▶ SiLU ─┐
+                   X ──c_fc────────────×──c_proj──▶ out
 ```
 
 Hidden size: `4 × n_embd` (256 with the defaults).

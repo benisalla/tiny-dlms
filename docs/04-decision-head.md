@@ -7,10 +7,10 @@ After the encoder, each candidate is a sequence of token vectors. The decision h
 
 ```mermaid
 flowchart LR
-    H["token vectors<br/>(B·K, T, 64)"] --> P["② Pooling<br/>(B, K, 64)"]
-    P --> C["③ Candidate layer<br/>(B, K, 64)"]
-    C --> S["④ Score head<br/>(B, K)"]
-    S --> M["⑤ Mask + softmax<br/>(B, K)"]
+    H["token vectors<br/>(b·k, s, e)"] --> P["② Pooling<br/>(b, k, e)"]
+    P --> C["③ Candidate layer<br/>(b, k, e)"]
+    C --> S["④ Score head<br/>(b, k)"]
+    S --> M["⑤ Mask + softmax<br/>(b, k)"]
 ```
 
 ## ② Pooling: one vector per candidate

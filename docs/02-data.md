@@ -54,8 +54,8 @@ Of the picked words, 80% become `[MASK]`, 10% a random word (here `john` → `we
 ### As tensors
 
 ```
-idx      (B, T)   long   [2, 88, 93, 131, 124, 18, 4, 138, 137, 131, 124, 67, 5, 140, 74, 88, 6]
-targets  (B, T)   long   [-1, -1, -1, -1, -1, -1, 5, 78, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+idx      (b, s)   long   [2, 88, 93, 131, 124, 18, 4, 138, 137, 131, 124, 67, 5, 140, 74, 88, 6]
+targets  (b, s)   long   [-1, -1, -1, -1, -1, -1, 5, 78, -1, -1, -1, -1, -1, -1, -1, -1, -1]
                                                   ▲   ▲
                                                  "."  "john"   (-1 = ignored by the loss)
 ```
@@ -134,7 +134,7 @@ is the one that answers "where is ...?"). A word never seen in training becomes 
 | File | `pretrain_*.txt` | `train/val/test.csv` |
 | One example | one story chunk | one decision (context + K candidates) |
 | Has answers? | no | yes |
-| Input tensor | `idx (B, T)` with some `[MASK]` | `idx (B, K, T)`, one row per candidate |
-| Target tensor | `targets (B, T)`: the hidden word, `-1` elsewhere | `targets (B, K)`: probability of each candidate |
-| Extra | | `cand_mask (B, K)`: which slots are real |
+| Input tensor | `idx (b, s)` with some `[MASK]` | `idx (b, k, s)`, one row per candidate |
+| Target tensor | `targets (b, s)`: the hidden word, `-1` elsewhere | `targets (b, k)`: probability of each candidate |
+| Extra | | `cand_mask (b, k)`: which slots are real |
 | Built by | `make_chunks`, `mask_tokens` | `load_csv`, `collate` |

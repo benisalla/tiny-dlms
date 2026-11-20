@@ -13,8 +13,8 @@ Tracks: train = seeds 0.., val = seeds 500.., and scripts/car_drive.py tests on 
 
     file             tensor     dtype   shape
     ================================================
-    images           uint8      (N, 3, 48, 48)
-    labels           long       (N,)    index into tiny_dlm.car.OPTION_TEXTS
+    images           uint8      (n, 3, 48, 48)   n frames
+    labels           long       (n,)    index into tiny_dlm.car.OPTION_TEXTS
     option_texts     list[str]  15
 """
 import argparse

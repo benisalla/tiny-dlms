@@ -18,10 +18,10 @@ class TinyDLM(nn.Module):
     and *scores all of them in one forward pass*, then a softmax over the candidates gives one
     probability per candidate. It can only ever pick one of the given candidates.
 
-        for each candidate i:
-            [CLS] context [SEP] candidate_i  ->  wte  ->  EBlock x n_layer  ->  ln_f  ->  pool = z_i
-        all z_i of one decision              ->  EBlock x n_cand_layer (no positions)  ->  ln_f
-                                             ->  score_head  ->  logit_i  ->  softmax over candidates
+        for each option j:
+            [CLS] context [SEP] option_j  ->  wte  ->  EBlock x n_layer  ->  ln_f  ->  pool = z_j
+        all z_j of one decision           ->  EBlock x n_cand_layer (no positions)  ->  ln_f
+                                          ->  score_head  ->  logit_j  ->  softmax over the k options
 
     pool: the mean of the candidate's own tokens (default) or the vector at [CLS] (see `pool`).
     The first part reads each (context, candidate) pair (the NanoJev layout). The second part lets
@@ -42,13 +42,15 @@ class TinyDLM(nn.Module):
         mlm_head: Linear layer, one vector -> a score for every word of the vocabulary (pre-training).
         config: Model configuration.
 
+            b decisions in the batch, k options per decision, s tokens per sequence, e embedding size
+
         Tensor          Type            Shape
         ===========================================================================
-        idx             long            (batch_size, n_candidates, seq_len)
-        cand_mask       bool            (batch_size, n_candidates)   True = real candidate
-        targets         float           (batch_size, n_candidates)   target probabilities
+        idx             long            (b, k, s)       one "[CLS] context [SEP] option" per option
+        cand_mask       bool            (b, k)          True = real option, False = empty slot
+        targets         float           (b, k)          target probabilities
         ---------------------------------------------------------------------------
-        logits          float           (batch_size, n_candidates)   -inf on empty slots
+        logits          float           (b, k)          -inf on empty slots
         ===========================================================================
     """
 
@@ -60,7 +62,7 @@ class TinyDLM(nn.Module):
 
         rotary = None
         if config.pos_encoding == "rope":  # one cos/sin table shared by every layer
-            rotary = RotaryEmbedding(config.head_size, config.block_size, config.rope_theta)
+            rotary = RotaryEmbedding(config.head_size, config.block_size, config.rope_base)
         layers = dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),  # token embeddings
             drop=nn.Dropout(config.drop_rate),
@@ -108,26 +110,26 @@ class TinyDLM(nn.Module):
     def encode(self, idx):
         """
         The shared Transformer encoder, used by both stages.
-        idx:     (N, T) token ids
-        returns: (N, T, n_embd) one vector per token
+        idx:     (b, s) token ids            b sequences, s tokens each
+        returns: (b, s, e) one vector of size e per token
         """
-        N, T = idx.size()
-        assert T <= self.config.block_size, f"Max sequence length is {self.config.block_size}, got {T}"
-        keep = idx != self.config.pad_id  # padding tokens are never attended to
-        x = self.transformer.wte(idx)  # (N, T, n_embd)
+        b, s = idx.size()
+        assert s <= self.config.block_size, f"Max sequence length is {self.config.block_size}, got {s}"
+        keep = idx != self.config.pad_id  # (b, s): padding tokens are never attended to
+        X = self.transformer.wte(idx)  # (b, s, e)
         if "wpe" in self.transformer:
-            pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
-            x = x + self.transformer.wpe(pos)  # (T, n_embd) broadcast over the batch
+            m = torch.arange(s, device=idx.device)  # token positions 0 .. s-1
+            X = X + self.transformer.wpe(m)  # (s, e) broadcast over the batch
 
-        x = self.transformer.drop(x)
+        X = self.transformer.drop(X)
         for block in self.transformer.h:
-            x = block(x, keep)
-        return self.transformer.ln_f(x)
+            X = block(X, keep)  # (b, s, e)
+        return self.transformer.ln_f(X)
 
-    def pool(self, idx, h):
+    def pool(self, idx, H):
         """
-        One vector per (context, candidate) sequence.
-        idx: (N, T) token ids, h: (N, T, n_embd) encoder output -> (N, n_embd)
+        One vector per (context, option) sequence.
+        idx: (b, s) token ids, H: (b, s, e) encoder output -> (b, e)
 
         "cls":       the vector at [CLS] (position 0), like BERT.
         "candidate": the mean of the vectors of the candidate's own tokens (everything after [SEP]).
@@ -137,46 +139,47 @@ class TinyDLM(nn.Module):
                      collect the evidence about it from the context.
         """
         if self.config.pool == "cls":
-            return h[:, 0]
-        after_sep = (idx == self.config.sep_id).cumsum(dim=-1) > 0
-        is_cand = after_sep & (idx != self.config.sep_id) & (idx != self.config.pad_id)  # (N, T)
-        w = is_cand.unsqueeze(-1).to(h.dtype)  # (N, T, 1)
-        return (h * w).sum(dim=1) / w.sum(dim=1).clamp(min=1)  # empty slots (no candidate) -> zeros
+            return H[:, 0]  # (b, e): the vector at position 0
+        after_sep = (idx == self.config.sep_id).cumsum(dim=-1) > 0  # (b, s): True from [SEP] on
+        is_option = after_sep & (idx != self.config.sep_id) & (idx != self.config.pad_id)  # (b, s)
+        w = is_option.unsqueeze(-1).to(H.dtype)  # (b, s, 1): 1 on the option's own tokens
+        return (H * w).sum(dim=1) / w.sum(dim=1).clamp(min=1)  # (b, e) mean; empty slots -> zeros
 
     def forward(self, idx, cand_mask=None, targets=None):
         """
         Two stages, one model:
 
         pre-training (cand_mask is None): masked-word prediction, like BERT
-            idx:     (B, T) token ids where some words were replaced by [MASK]
-            targets: (B, T) the original id at masked positions, -1 elsewhere (not part of the loss)
-            returns: logits (B, T, vocab_size) and the loss
+            idx:     (b, s) token ids where some words were replaced by [MASK]
+            targets: (b, s) the original id at masked positions, -1 elsewhere (not part of the loss)
+            returns: logits (b, s, vocab_size) and the loss
 
         fine-tuning / deciding (cand_mask given):
-            idx:       (B, K, T) token ids, one "[CLS] context [SEP] candidate" sequence per candidate
-            cand_mask: (B, K) True for real candidates, False for empty slots (decisions have different K)
-            targets:   (B, K) target probabilities (sum to 1 over the real candidates), optional
-            returns:   logits (B, K) and the loss (None when targets are not given)
+            idx:       (b, k, s) token ids, one "[CLS] context [SEP] option" sequence per option
+            cand_mask: (b, k) True for real options, False for empty slots (decisions have different k)
+            targets:   (b, k) target probabilities (sum to 1 over the real options), optional
+            returns:   logits (b, k) and the loss (None when targets are not given)
         """
         if cand_mask is None:
-            logits = self.mlm_head(self.encode(idx))  # (B, T, vocab_size)
+            logits = self.mlm_head(self.encode(idx))  # (b, s, vocab_size)
             loss = None
             if targets is not None:
                 loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
             return logits, loss
 
-        B, K, T = idx.size()
+        b, k, s = idx.size()  # b decisions, k options each, s tokens per sequence
 
-        # 1. read every (context, candidate) pair as its own sequence -> one vector per candidate
-        z = self.pool(idx.view(B * K, T), self.encode(idx.view(B * K, T))).view(B, K, -1)  # (B, K, n_embd)
+        # 1. read every (context, option) pair as its own sequence -> one vector per option
+        pairs = idx.view(b * k, s)  # all options of all decisions in one big batch
+        Z = self.pool(pairs, self.encode(pairs)).view(b, k, -1)  # (b, k, e)
 
-        # 2. the candidates of one decision look at each other (empty slots are hidden)
+        # 2. the options of one decision look at each other (empty slots are hidden)
         for block in self.candidates.h:
-            z = block(z, cand_mask)
-        z = self.candidates.ln_f(z)
+            Z = block(Z, cand_mask)  # (b, k, e)
+        Z = self.candidates.ln_f(Z)
 
-        # 3. one logit per candidate; empty slots can never be chosen
-        logits = self.score_head(z).squeeze(-1)  # (B, K)
+        # 3. one logit per option; empty slots can never be chosen
+        logits = self.score_head(Z).squeeze(-1)  # (b, k)
         logits = logits.masked_fill(~cand_mask, -float('Inf'))
 
         loss = None
@@ -208,7 +211,7 @@ class TinyDLM(nn.Module):
         """
         Pick one candidate per decision (the decision-model version of `generate`).
         temperature = 0 -> take the most likely candidate; > 0 -> sample (useful to explore).
-        returns: choice (B,) candidate indices, probs (B, K)
+        returns: choice (b,) the chosen option of each decision, probs (b, k)
         """
         logits, _ = self(idx, cand_mask)
         if temperature == 0:

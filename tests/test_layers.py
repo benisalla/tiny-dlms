@@ -21,7 +21,7 @@ def test_build_norm_follows_config():
 
 
 def test_rope_depends_only_on_relative_position():
-    rope = RotaryEmbedding(head_dim=8, max_positions=32)
+    rope = RotaryEmbedding(h=8, max_positions=32)
     q_vec, k_vec = torch.randn(8), torch.randn(8)
 
     def score(m, n):
@@ -37,7 +37,7 @@ def test_rope_depends_only_on_relative_position():
 
 
 def test_rope_keeps_vector_length():
-    rope = RotaryEmbedding(head_dim=8, max_positions=16)
+    rope = RotaryEmbedding(h=8, max_positions=16)
     q = torch.randn(2, 4, 16, 8)
     q_rot, _ = rope(q, q)
     assert torch.allclose(q_rot.norm(dim=-1), q.norm(dim=-1), atol=1e-5)  # a rotation only turns vectors
@@ -70,3 +70,13 @@ def test_mlp_and_block_keep_shape(gated):
     x = torch.randn(2, 7, 32)
     assert MLP(cfg)(x).shape == x.shape
     assert EBlock(cfg)(x, torch.ones(2, 7, dtype=torch.bool)).shape == x.shape
+
+
+def test_rope_rotates_by_the_expected_angle():
+    # h = 2 -> one pair (i = 0), frequency 1 / base^0 = 1, so theta = m: position m = 1 turns by 1 radian
+    rope = RotaryEmbedding(h=2, max_positions=4)
+    X = torch.zeros(1, 1, 4, 2)
+    X[0, 0, 1] = torch.tensor([1.0, 0.0])
+    Q, _ = rope(X, X)
+    expected = torch.tensor([torch.cos(torch.tensor(1.0)), torch.sin(torch.tensor(1.0))])
+    assert torch.allclose(Q[0, 0, 1], expected, atol=1e-6)

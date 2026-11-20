@@ -10,18 +10,18 @@ class EBlock(nn.Module):
         Transformer (Encoder) Block: communication layer (att mechanism) + computation layer (feedforward).
         Pre-normalisation, as in GPT-2 and every model after it.
 
-            x = x + attn(ln_1(x), keep)
-            x = x + mlp(ln_2(x))
+            X = X + attn(ln_1(X), keep)
+            X = X + mlp(ln_2(X))
 
         Same block as tiny-llm's DBlock, except attention is bidirectional (Encoder) instead of
         causal (Decoder), and it takes a `keep` mask for padding.
 
         Tensor          Type            Shape
         ===========================================================================
-        input           float           (batch_size, seq_len, n_embd)
-        keep            bool            (batch_size, seq_len)
+        input           float           (b, s, e)      b sequences, s tokens, e embedding size
+        keep            bool            (b, s)
         ---------------------------------------------------------------------------
-        output          float           (batch_size, seq_len, n_embd)
+        output          float           (b, s, e)      b sequences, s tokens, e embedding size
         ===========================================================================
     """
 
@@ -32,6 +32,6 @@ class EBlock(nn.Module):
         self.ln_2 = build_norm(config)
         self.mlp = MLP(config)
 
-    def forward(self, x, keep):
-        x = x + self.attn(self.ln_1(x), keep)
-        return x + self.mlp(self.ln_2(x))
+    def forward(self, X, keep):
+        X = X + self.attn(self.ln_1(X), keep)
+        return X + self.mlp(self.ln_2(X))

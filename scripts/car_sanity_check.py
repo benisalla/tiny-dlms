@@ -54,13 +54,13 @@ def main(argv=None):
     train = torch.load(os.path.join(args.data_dir, "train.pt"), weights_only=True)
     val = torch.load(os.path.join(args.data_dir, "val.pt"), weights_only=True)
     texts, imgs, labels = train["option_texts"], train["images"], train["labels"]
-    K = len(texts)
+    k = len(texts)
 
     print("data")
-    used = torch.bincount(labels, minlength=K)
+    used = torch.bincount(labels, minlength=k)
     check("1. frames and labels look right",
           imgs.shape[1:] == (3, 48, 48) and imgs.dtype == torch.uint8 and imgs.float().std() > 10
-          and labels.min() >= 0 and labels.max() < K and bool((used > 0).all()),
+          and labels.min() >= 0 and labels.max() < k and bool((used > 0).all()),
           f"{len(labels):,} frames, pixel std {imgs.float().std():.0f}, rarest option used {used.min()} times")
     sample = val["images"][::50]
     shared = sum(bool((imgs[::10] == v).flatten(1).all(1).any()) for v in sample)
@@ -75,12 +75,12 @@ def main(argv=None):
     cfg = ModelConfig(vocab_size=len(tok), block_size=48, n_layer=args.n_layer, n_embd=args.n_embd, n_head=4,
                       drop_rate=0.0, pad_id=tok.pad_id, sep_id=tok.sep_id)  # no dropout: checks are deterministic
     build = lambda: ImageDLM(cfg)  # noqa: E731
-    ids, mask = encode_options(texts, tok).expand(64, -1, -1), torch.ones(64, K, dtype=torch.bool)
-    targets = torch.nn.functional.one_hot(y, K).float()
+    ids, mask = encode_options(texts, tok).expand(64, -1, -1), torch.ones(64, k, dtype=torch.bool)
+    targets = torch.nn.functional.one_hot(y, k).float()
     run = lambda m: m(x, ids, mask, targets)  # noqa: E731
     model = build()
 
-    sanity.check_init_loss("4. loss at init = random guessing", run(model)[1].item(), math.log(K))
+    sanity.check_init_loss("4. loss at init = random guessing", run(model)[1].item(), math.log(k))
     sanity.check_gradients("5. every parameter gets a gradient", model, run)
     sanity.check_activations("6. activations stay healthy", model, model.transformer.h, run)
     sanity.check_update_ratio("7. one optimizer step moves the weights a sane amount", model, run)
@@ -93,7 +93,7 @@ def main(argv=None):
         alone, _ = model(changed, ids[:4], mask[:4])
         check("8. images in a batch do not leak into each other", torch.allclose(full[0], alone[0], atol=1e-5),
               f"max difference {(full[0] - alone[0]).abs().max():.1e}")
-        perm = torch.randperm(K)
+        perm = torch.randperm(k)
         p = torch.softmax(model(x[:1], ids[:1], mask[:1])[0], -1)[0]
         q = torch.softmax(model(x[:1], ids[:1, perm], mask[:1])[0], -1)[0]
         check("9. shuffling the options only shuffles the probabilities", torch.allclose(p[perm], q, atol=1e-5))

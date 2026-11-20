@@ -12,12 +12,12 @@ The checks (the classic "make sure the network can learn at all" list):
               2. no test / val context also appears in the training set (no leak)
               3. val / test words are known to the tokenizer (few <unk>)
               3b. look at the data: one input decoded back to words, exactly as the network gets it
-    model     4. loss at init = loss of random guessing   (decisions: mean log K, words: log vocab)
+    model     4. loss at init = loss of random guessing   (decisions: mean log k, words: log vocab)
               5. every parameter gets a finite, non-zero gradient   (nothing is disconnected)
               5b. activations stay healthy from block to block (no explosion, no dead layer)
               5c. one optimizer step moves the weights by a sane amount (learning rate not absurd)
               5d. the same seed gives the same loss
-              6. decisions in a batch do not leak into each other (padding of K and T changes nothing)
+              6. decisions in a batch do not leak into each other (padding of k and s changes nothing)
               7. shuffling the candidates only shuffles the probabilities
               8. any number of candidates works: 2, 3, 7, 10 -> probabilities sum to 1
     learning  9. the model can memorise one small batch of decisions (loss -> ~0, 100% correct)
@@ -97,9 +97,9 @@ def main(argv=None):
     batch = collate(rng.sample(train, 64), tokenizer)
     with torch.no_grad():
         _, loss = model(*batch)
-    uniform = batch[1].sum(-1).float().log().mean().item()  # random guessing: -log(1/K), averaged
+    uniform = batch[1].sum(-1).float().log().mean().item()  # random guessing: -log(1/k), averaged
     check("4a. decision loss at init = random guessing", abs(loss.item() - uniform) < 0.1,
-          f"loss {loss.item():.3f}, mean log K {uniform:.3f}")
+          f"loss {loss.item():.3f}, mean log k {uniform:.3f}")
     if texts:
         chunks = make_chunks(texts[:64], tokenizer, args.block_size)
         mlm = mask_tokens(chunks[:32], tokenizer, rng=rng)
@@ -130,7 +130,7 @@ def main(argv=None):
     big = max(train[:500], key=lambda d: (len(d.candidates), len(d.context)))
     with torch.no_grad():
         alone = model(*collate([one], tokenizer)[:2])[0][0, :2]
-        crowd = model(*collate([one, big], tokenizer)[:2])[0][0, :2]  # padded to big's K and T
+        crowd = model(*collate([one, big], tokenizer)[:2])[0][0, :2]  # padded to big's k and s
     check("6. decisions in a batch do not leak into each other", torch.allclose(alone, crowd, atol=1e-5),
           f"max difference {(alone - crowd).abs().max().item():.1e}")
 
@@ -145,12 +145,12 @@ def main(argv=None):
 
     places = ["bathroom", "bedroom", "garden", "hallway", "kitchen", "office"]
     sums = []
-    for K in (2, 3, 7, 10):
-        cands = (places * 2)[:K]
+    for k in (2, 3, 7, 10):
+        cands = (places * 2)[:k]
         with torch.no_grad():
             probs = torch.softmax(model(*collate([Decision(one.context, cands, cands[:1])], tokenizer)[:2])[0], -1)
         sums.append(probs.sum().item())
-    check("8. any number of candidates works (K = 2, 3, 7, 10)", all(abs(s - 1) < 1e-5 for s in sums),
+    check("8. any number of candidates works (k = 2, 3, 7, 10)", all(abs(s - 1) < 1e-5 for s in sums),
           "probabilities sum to " + ", ".join(f"{s:.3f}" for s in sums))
 
     # ------------------------------------------------------------------ learning

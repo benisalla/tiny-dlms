@@ -70,25 +70,25 @@ With the default config (`n_embd = 64`) and a batch of **B** decisions, **K** ca
 batch), **T** tokens (the longest sequence in the batch):
 
 ```
-idx         (B, K, T)        token ids                         e.g. (32, 6, 71)
+idx         (b, k, s)        token ids                         e.g. (32, 6, 71)
    │  reshape: every candidate becomes its own row
    ▼
-            (B·K, T)                                            (192, 71)
+            (b·k, s)                                            (192, 71)
    │  ① encoder
    ▼
-            (B·K, T, 64)     one vector per token               (192, 71, 64)
+            (b·k, s, e)     one vector per token               (192, 71, 64)
    │  ② pooling
    ▼
-z           (B, K, 64)       one vector per candidate           (32, 6, 64)
+z           (b, k, e)       one vector per candidate           (32, 6, 64)
    │  ③ candidate layer
    ▼
-            (B, K, 64)                                          (32, 6, 64)
+            (b, k, e)                                          (32, 6, 64)
    │  ④ score head
    ▼
-logits      (B, K)           one number per candidate           (32, 6)
+logits      (b, k)           one number per candidate           (32, 6)
    │  ⑤ softmax over K (empty slots get -inf → probability 0)
    ▼
-probs       (B, K)           each row sums to 1                 (32, 6)
+probs       (b, k)           each row sums to 1                 (32, 6)
 ```
 
 ## Why the number of options is free

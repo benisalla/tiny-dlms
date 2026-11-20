@@ -16,8 +16,8 @@ class ModelConfig:
     vocab_size: int = 0  # set from the tokenizer before building the model
     n_layer: int = 2  # blocks that read each (context, candidate) pair
     n_cand_layer: int = 1  # blocks that let the candidates of one decision look at each other
-    n_head: int = 4
-    n_embd: int = 64
+    n_head: int = 4  # nh: attention heads
+    n_embd: int = 64  # e: embedding size of every token vector
     drop_rate: float = 0.1
     bias: bool = False  # biases in Linear layers and LayerNorms
     pad_id: int = 0  # padding token id, ignored by attention
@@ -25,12 +25,12 @@ class ModelConfig:
     pool: str = "candidate"  # one vector per candidate: "candidate" = mean of the candidate's own tokens, "cls" = [CLS]
 
     # ---- design choices (defaults = Llama-style) ----
-    n_kv_head: int = 0  # 0 -> same as n_head. Fewer KV heads = grouped-query attention (Llama, Qwen2)
-    head_dim: int = 0  # 0 -> n_embd // n_head
+    n_kv_head: int = 0  # nkv: 0 -> same as n_head. Fewer K/V heads = grouped-query attention (Llama, Qwen2)
+    head_dim: int = 0  # h, size per head: 0 -> n_embd // n_head (e = nh * h)
     norm_type: str = "rmsnorm"  # "rmsnorm" (Llama, Qwen2) or "layernorm" (GPT-2)
     norm_eps: float = 1e-6
     pos_encoding: str = "rope"  # "rope" rotary (Llama, Qwen2) or "learned" absolute positions (GPT-2)
-    rope_theta: float = 10000.0  # RoPE base frequency
+    rope_base: float = 10000.0  # RoPE: theta[m, i] = m / rope_base^(2i / h)  (m position, i pair, h size per head)
     activation: str = "silu"  # "silu" (Llama, inside SwiGLU), "gelu_tanh" (GPT-2), "gelu", "relu"
     gated_mlp: bool = True  # SwiGLU MLP: down(act(gate(x)) * up(x)) (Llama, Qwen2)
     intermediate_size: int = 0  # MLP hidden size, 0 -> 4 * n_embd
@@ -45,11 +45,11 @@ class ModelConfig:
 
     # derived sizes
     @property
-    def kv_heads(self):
+    def kv_heads(self):  # nkv
         return self.n_kv_head or self.n_head
 
     @property
-    def head_size(self):
+    def head_size(self):  # h
         return self.head_dim or self.n_embd // self.n_head
 
     @property
@@ -62,6 +62,8 @@ class ModelConfig:
     @classmethod
     def from_dict(cls, d):
         """Build a config from a dict, ignoring unknown keys (e.g. old checkpoints)."""
+        if "rope_theta" in d:  # old name of rope_base
+            d = {**d, "rope_base": d["rope_theta"]}
         names = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in names})
 

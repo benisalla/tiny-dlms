@@ -11,7 +11,7 @@ class SelfAttention(nn.Module):
           nothing, so every token may look at every other token, before and after it )
 
         Supports multi-head attention and grouped-query attention (Llama, Qwen2), where several query
-        heads share the same key/value head (n_kv_head < n_head).
+        heads share the same key/value head (nkv < nh).
 
         `keep` marks what may be attended to: real tokens (not padding) inside a pair, or real
         candidates (not empty slots) when the candidates look at each other.
@@ -19,56 +19,59 @@ class SelfAttention(nn.Module):
         `use_positions=False` turns RoPE off. Used for the candidate layer: the candidates are an
         unordered set, so their order must not change anything.
 
+            b batch, s sequence length, e embedding size, nh heads, nkv key/value heads, h size per head
+
         Tensor          Type            Shape
         ===========================================================================
-        input           float           (batch_size, seq_len, n_embd)
-        keep            bool            (batch_size, seq_len)
+        X               float           (b, s, e)
+        keep            bool            (b, s)
+        Q               float           (b, nh, s, h)
+        K, V            float           (b, nkv, s, h) -> repeated to (b, nh, s, h)
         ---------------------------------------------------------------------------
-        output          float           (batch_size, seq_len, n_embd)
+        output          float           (b, s, e)
         ===========================================================================
     """
 
     def __init__(self, config, rotary=None, use_positions=True):
         super().__init__()
-        self.n_head = config.n_head
-        self.n_kv_head = config.kv_heads
-        self.head_dim = config.head_size
+        self.nh = config.n_head
+        self.nkv = config.kv_heads
+        self.h = config.head_size
         self.drop_rate = config.drop_rate
-        q_dim, kv_dim = self.n_head * self.head_dim, self.n_kv_head * self.head_dim
-        self.split_sizes = [q_dim, kv_dim, kv_dim]
+        self.split_sizes = [self.nh * self.h, self.nkv * self.h, self.nkv * self.h]
 
-        # query, key, value projections for all heads, in one batch
-        self.c_attn = nn.Linear(config.n_embd, q_dim + 2 * kv_dim, bias=config.bias)
+        # Q, K, V projections for all heads, in one matrix
+        self.c_attn = nn.Linear(config.n_embd, sum(self.split_sizes), bias=config.bias)
         # output projection
-        self.c_proj = nn.Linear(q_dim, config.n_embd, bias=config.bias)
+        self.c_proj = nn.Linear(self.nh * self.h, config.n_embd, bias=config.bias)
         self.res_drop = nn.Dropout(config.drop_rate)
 
         # the model shares one rotary table between all layers; standalone layers build their own
         self.rotary = None
         if use_positions and config.pos_encoding == "rope":
-            self.rotary = rotary or RotaryEmbedding(self.head_dim, config.block_size, config.rope_theta)
+            self.rotary = rotary or RotaryEmbedding(self.h, config.block_size, config.rope_base)
 
-    def forward(self, x, keep):
-        B, T, _ = x.size()
+    def forward(self, X, keep):
+        b, s, _ = X.size()
 
-        q, k, v = self.c_attn(x).split(self.split_sizes, dim=2)
-        q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)  # (B, nh, T, hs)
-        k = k.view(B, T, self.n_kv_head, self.head_dim).transpose(1, 2)  # (B, n_kv, T, hs)
-        v = v.view(B, T, self.n_kv_head, self.head_dim).transpose(1, 2)  # (B, n_kv, T, hs)
+        Q, K, V = self.c_attn(X).split(self.split_sizes, dim=2)
+        Q = Q.view(b, s, self.nh, self.h).transpose(1, 2)  # (b, nh, s, h)
+        K = K.view(b, s, self.nkv, self.h).transpose(1, 2)  # (b, nkv, s, h)
+        V = V.view(b, s, self.nkv, self.h).transpose(1, 2)  # (b, nkv, s, h)
 
-        if self.rotary is not None:  # positions go into q and k only, never into v
-            q, k = self.rotary(q, k)
+        if self.rotary is not None:  # positions go into Q and K only, never into V
+            Q, K = self.rotary(Q, K)
 
-        if self.n_kv_head != self.n_head:  # grouped-query attention: share each kv head between query heads
-            k = k.repeat_interleave(self.n_head // self.n_kv_head, dim=1)
-            v = v.repeat_interleave(self.n_head // self.n_kv_head, dim=1)
+        if self.nkv != self.nh:  # grouped-query attention: each K/V head is shared by nh / nkv query heads
+            K = K.repeat_interleave(self.nh // self.nkv, dim=1)  # (b, nh, s, h)
+            V = V.repeat_interleave(self.nh // self.nkv, dim=1)
 
-        # every query may look at every kept key: (B, 1, 1, T) broadcasts over heads and queries
+        # every query may look at every kept key: (b, 1, 1, s) broadcasts over heads and queries
         mask = keep[:, None, None, :]
 
-        # flash attention when available: softmax(q k^T / sqrt(hs)) v
-        y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask,
-                                           dropout_p=self.drop_rate if self.training else 0.0)
-        y = y.transpose(1, 2).contiguous().view(B, T, self.n_head * self.head_dim)  # re-assemble all heads
+        # flash attention when available: softmax(Q K^T / sqrt(h)) V
+        context = F.scaled_dot_product_attention(Q, K, V, attn_mask=mask,
+                                                 dropout_p=self.drop_rate if self.training else 0.0)  # (b, nh, s, h)
+        context = context.transpose(1, 2).contiguous().view(b, s, self.nh * self.h)  # (b, s, e)
 
-        return self.res_drop(self.c_proj(y))
+        return self.res_drop(self.c_proj(context))

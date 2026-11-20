@@ -8,11 +8,11 @@ One model, two stages. They share the encoder; each stage has its own head and i
 flowchart LR
     subgraph S1["Stage 1 · pre-training · scripts/train.py"]
         direction TB
-        A1["story with hidden words<br/>idx (B, T)"] --> A2["Encoder"] --> A3["MLM head<br/>(n_embd → vocab)"] --> A4["loss: guess the<br/>hidden words"]
+        A1["story with hidden words<br/>idx (b, s)"] --> A2["Encoder"] --> A3["MLM head<br/>(n_embd → vocab)"] --> A4["loss: guess the<br/>hidden words"]
     end
     subgraph S2["Stage 2 · fine-tuning · scripts/finetune.py"]
         direction TB
-        B1["decision<br/>idx (B, K, T)"] --> B2["Encoder"] --> B3["pool + candidate layer<br/>+ score head"] --> B4["loss: pick the<br/>right candidate"]
+        B1["decision<br/>idx (b, k, s)"] --> B2["Encoder"] --> B3["pool + candidate layer<br/>+ score head"] --> B4["loss: pick the<br/>right candidate"]
     end
     S1 -- "pretrain.pt<br/>(encoder weights)" --> S2
 ```

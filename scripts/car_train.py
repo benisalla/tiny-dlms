@@ -31,14 +31,14 @@ def load_split(path):
 
 def make_batch_fn(images, labels, option_idx, batch_size, device, rng):
     """A random batch: (images, idx, cand_mask, targets). Every frame has the same 15 options."""
-    K = option_idx.size(0)
+    k = option_idx.size(0)  # options per frame
     def get_batch():
-        i = torch.tensor(rng.sample(range(len(labels)), min(batch_size, len(labels))))
-        B = len(i)
-        targets = torch.zeros(B, K)
-        targets[torch.arange(B), labels[i]] = 1.0
-        return (images[i].to(device), option_idx.expand(B, -1, -1), torch.ones(B, K, dtype=torch.bool, device=device),
-                targets.to(device))
+        rows = torch.tensor(rng.sample(range(len(labels)), min(batch_size, len(labels))))
+        b = len(rows)
+        targets = torch.zeros(b, k)  # (b, k): 1 on the teacher's option
+        targets[torch.arange(b), labels[rows]] = 1.0
+        return (images[rows].to(device), option_idx.expand(b, -1, -1),
+                torch.ones(b, k, dtype=torch.bool, device=device), targets.to(device))
     return get_batch
 
 
@@ -49,8 +49,8 @@ def option_accuracy(model, images, labels, option_idx, device, batch_size=256):
     choices = []
     for s in range(0, len(labels), batch_size):
         img = images[s:s + batch_size].to(device)
-        B, K = len(img), option_idx.size(0)
-        choice, _ = model.decide(img, option_idx.expand(B, -1, -1), torch.ones(B, K, dtype=torch.bool, device=device))
+        b, k = len(img), option_idx.size(0)
+        choice, _ = model.decide(img, option_idx.expand(b, -1, -1), torch.ones(b, k, dtype=torch.bool, device=device))
         choices.append(choice.cpu())
     model.train()
     choice = torch.cat(choices)
@@ -70,7 +70,7 @@ def main(argv=None):
     train_images, train_labels, option_texts = load_split(os.path.join(cfg.data_dir, "train.pt"))
     val_images, val_labels, _ = load_split(os.path.join(cfg.data_dir, "val.pt"))
     tokenizer = WordTokenizer.from_texts(option_texts)  # 12 words: steer, slight, left, accelerate, ...
-    option_idx = encode_options(option_texts, tokenizer, device)  # (15, L)
+    option_idx = encode_options(option_texts, tokenizer, device)  # (k = 15 options, s tokens)
 
     model_cfg.vocab_size, model_cfg.pad_id, model_cfg.sep_id = len(tokenizer), tokenizer.pad_id, tokenizer.sep_id
     model = ImageDLM(model_cfg).to(device)

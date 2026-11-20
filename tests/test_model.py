@@ -93,3 +93,9 @@ def test_masked_word_prediction_mode(tiny_model, tokenizer):
 
 def test_mlm_head_is_tied_to_token_embeddings(tiny_model):
     assert tiny_model.mlm_head.weight is tiny_model.transformer.wte.weight
+
+
+def test_old_config_name_rope_theta_still_loads():
+    from tiny_dlm import ModelConfig
+    cfg = ModelConfig.from_dict({"vocab_size": 10, "rope_theta": 500.0, "unknown_key": 1})
+    assert cfg.rope_base == 500.0

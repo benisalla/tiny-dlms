@@ -97,15 +97,15 @@ flowchart TB
 
 The steps, with the code that does each one (`tiny_dlm/model.py`, `forward`):
 
-| Step | What happens | Shape (B decisions, K options, T tokens, 64 = `n_embd`) |
+| Step | What happens | Shape (b decisions, k options, s tokens, e = 64 embedding size) |
 |---|---|---|
-| 0 | build one `[CLS] context [SEP] option` sequence per option | `idx (B, K, T)` |
-| 1 | stack all options of all decisions into one big batch | `(B*K, T)` |
-| 2 | the encoder reads each sequence, both directions (like BERT) | `(B*K, T, 64)` |
-| 3 | pool: average the vectors of the option's own tokens (the ones after `[SEP]`): one vector per option | `z (B, K, 64)` |
-| 4 | candidate layer: the options of one decision attend to each other ("hallway" can see that "bathroom" is also an option) | `(B, K, 64)` |
-| 5 | `score_head` = `nn.Linear(64, 1)`: each vector becomes one number | `logits (B, K)` |
-| 6 | softmax **across the options** | `probs (B, K)`, each row sums to 1 |
+| 0 | build one `[CLS] context [SEP] option` sequence per option | `idx (b, k, s)` |
+| 1 | stack all options of all decisions into one big batch | `(b*k, s)` |
+| 2 | the encoder reads each sequence, both directions (like BERT) | `(b*k, s, e)` |
+| 3 | pool: average the vectors of the option's own tokens (the ones after `[SEP]`): one vector per option | `z (b, k, e)` |
+| 4 | candidate layer: the options of one decision attend to each other ("hallway" can see that "bathroom" is also an option) | `(b, k, e)` |
+| 5 | `score_head` = `nn.Linear(64, 1)`: each vector becomes one number | `logits (b, k)` |
+| 6 | softmax **across the options** | `probs (b, k)`, each row sums to 1 |
 
 ### 4. Why it can choose among 2, 3, 6 or 50 options
 
@@ -291,14 +291,14 @@ STAGE 1 · pre-training · data/babi/pretrain_train.txt (one story per line, no 
   file   : mary moved to the bathroom . john went to the hallway . where is mary ?
   input  : [CLS] mary moved to the bathroom [MASK] west went to the hallway . where is mary ?
   target :                                   .     john                           (guess the hidden words)
-  tensors: idx (B, T) · targets (B, T), -1 where nothing is hidden
+  tensors: idx (b, s) · targets (b, s), -1 where nothing is hidden
 
 STAGE 2 · fine-tuning · data/babi/train.csv (context, candidates, answers)
   file   : "mary moved to the bathroom . john went to the hallway . where is mary ?", "bathroom | hallway", "bathroom"
   input  : [CLS] mary moved to the bathroom . john went to the hallway . where is mary ? [SEP] bathroom
            [CLS] mary moved to the bathroom . john went to the hallway . where is mary ? [SEP] hallway
   target : bathroom 1.0 · hallway 0.0                                               (pick the right candidate)
-  tensors: idx (B, K, T) · cand_mask (B, K) · targets (B, K)
+  tensors: idx (b, k, s) · cand_mask (b, k) · targets (b, k)
 ```
 
 ## More data: many options, one model (`scripts/prepare_data.py`)

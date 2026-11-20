@@ -13,14 +13,14 @@ class MLP(nn.Module):
         Multi-Layer Perceptron (MLP): computation layer.
         Non-linearity = complex mappings + feature extraction + ... + processing data (reasoning)
 
-            classic (GPT-2):           c_proj( act(c_fc(x)) )
-            gated   (Llama, Qwen2):    c_proj( act(c_gate(x)) * c_fc(x) )      a.k.a. SwiGLU with act = SiLU
+            classic (GPT-2):           c_proj( act(c_fc(X)) )
+            gated   (Llama, Qwen2):    c_proj( act(c_gate(X)) * c_fc(X) )      a.k.a. SwiGLU with act = SiLU
 
         Tensor          Type            Shape
         ===========================================================================
-        input           float           (batch_size, seq_len, n_embd)
+        input           float           (b, s, e)      b sequences, s tokens, e embedding size
         ---------------------------------------------------------------------------
-        output          float           (batch_size, seq_len, n_embd)
+        output          float           (b, s, e)      b sequences, s tokens, e embedding size
         ===========================================================================
     """
 
@@ -33,9 +33,9 @@ class MLP(nn.Module):
         self.c_proj = nn.Linear(hidden, config.n_embd, bias=config.bias)  # "down" projection
         self.dropout = nn.Dropout(config.drop_rate)
 
-    def forward(self, x):
+    def forward(self, X):
         if self.c_gate is not None:
-            h = self.act(self.c_gate(x)) * self.c_fc(x)
+            hidden = self.act(self.c_gate(X)) * self.c_fc(X)  # (b, s, hidden_size): 4e by default
         else:
-            h = self.act(self.c_fc(x))
-        return self.dropout(self.c_proj(h))
+            hidden = self.act(self.c_fc(X))  # (b, s, hidden_size): 4e by default
+        return self.dropout(self.c_proj(hidden))  # (b, s, e)

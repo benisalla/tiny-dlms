@@ -17,14 +17,17 @@ option and a softmax over the options gives one probability each.
 
 The image is cut into patches ONCE per decision, then shared by its K options (expand, no copy).
 
+        b images in the batch, k options per image, p patches per image, s tokens per "[SEP] option",
+        e embedding size
+
     Tensor          Type            Shape
     ===========================================================================
-    images          uint8 / float   (B, 3, H, W)        0..255
-    idx             long            (B, K, L)           "[SEP] option" token ids
-    cand_mask       bool            (B, K)              True = real option
-    targets         float           (B, K)              target probabilities
+    images          uint8           (b, 3, height, width)   pixels 0..255
+    idx             long            (b, k, s)               "[SEP] option" token ids
+    cand_mask       bool            (b, k)                  True = real option
+    targets         float           (b, k)                  target probabilities
     ---------------------------------------------------------------------------
-    logits          float           (B, K)              -inf on empty slots
+    logits          float           (b, k)                  -inf on empty slots
     ===========================================================================
 """
 import math
@@ -43,7 +46,7 @@ class PatchEmbedding(nn.Module):
     """
         Cut the image into non-overlapping patches and project each one to a vector (ViT, Dosovitskiy et al. 2020).
 
-            (B, 3, 48, 48)  -> unfold 8x8 ->  (B, 36, 3*8*8 = 192)  -> Linear ->  (B, 36, n_embd)  + position
+            (b, 3, 48, 48)  -> unfold 8x8 ->  (b, p = 36, 3*8*8 = 192)  -> Linear ->  (b, p, e)  + position
 
         Written with `unfold` + `Linear` so every step is visible (same as a Conv2d with stride = kernel = patch).
         The position embedding is learned: one vector per patch location.
@@ -59,8 +62,8 @@ class PatchEmbedding(nn.Module):
 
     def forward(self, images):
         x = images.float() / 127.5 - 1.0  # 0..255 -> -1..1
-        patches = F.unfold(x, kernel_size=self.patch_size, stride=self.patch_size)  # (B, 3*p*p, n_patches)
-        return self.proj(patches.transpose(1, 2)) + self.pos  # (B, n_patches, n_embd)
+        patches = F.unfold(x, kernel_size=self.patch_size, stride=self.patch_size)  # (b, 3*8*8, p)
+        return self.proj(patches.transpose(1, 2)) + self.pos  # (b, p, e)
 
 
 class ImageDLM(nn.Module):
@@ -81,7 +84,7 @@ class ImageDLM(nn.Module):
         self.patches = PatchEmbedding(image_size, patch_size, channels, config.n_embd)
         rotary = None
         if config.pos_encoding == "rope":
-            rotary = RotaryEmbedding(config.head_size, config.block_size, config.rope_theta)
+            rotary = RotaryEmbedding(config.head_size, config.block_size, config.rope_base)
         self.transformer = nn.ModuleDict(dict(
             wte=nn.Embedding(config.vocab_size, config.n_embd),  # option words
             drop=nn.Dropout(config.drop_rate),
@@ -111,34 +114,34 @@ class ImageDLM(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
     def forward(self, images, idx, cand_mask, targets=None):
-        B, K, L = idx.size()
-        P = self.patches.n_patches
-        assert P + L <= self.config.block_size, f"{P} patches + {L} option tokens > block_size {self.config.block_size}"
+        b, k, s = idx.size()  # b images, k options each, s tokens per "[SEP] option"
+        p = self.patches.n_patches
+        assert p + s <= self.config.block_size, f"{p} patches + {s} option tokens > block_size {self.config.block_size}"
 
-        # 1. the image, once per decision, shared by its K options
-        img = self.patches(images)  # (B, P, n_embd)
-        img = img.unsqueeze(1).expand(B, K, P, -1).reshape(B * K, P, -1)
+        # 1. the image, cut into patches once, then shared by its k options (expand: no copy)
+        patches = self.patches(images)  # (b, p, e)
+        patches = patches.unsqueeze(1).expand(b, k, p, -1).reshape(b * k, p, -1)  # (b*k, p, e)
 
-        # 2. [patches] [SEP] option_k -> one sequence per option
-        opt_idx = idx.reshape(B * K, L)
-        x = torch.cat([img, self.transformer.wte(opt_idx)], dim=1)  # (B*K, P+L, n_embd)
-        keep = torch.cat([torch.ones(B * K, P, dtype=torch.bool, device=idx.device),
-                          opt_idx != self.config.pad_id], dim=1)
-        x = self.transformer.drop(x)
+        # 2. one sequence per option: [patch_1 .. patch_p] [SEP] option words
+        options = idx.reshape(b * k, s)  # (b*k, s)
+        X = torch.cat([patches, self.transformer.wte(options)], dim=1)  # (b*k, p+s, e)
+        keep = torch.cat([torch.ones(b * k, p, dtype=torch.bool, device=idx.device),
+                          options != self.config.pad_id], dim=1)  # (b*k, p+s): padding is never attended to
+        X = self.transformer.drop(X)
         for block in self.transformer.h:
-            x = block(x, keep)
-        h = self.transformer.ln_f(x)[:, P:]  # the option part only: (B*K, L, n_embd)
+            X = block(X, keep)  # (b*k, p+s, e)
+        H = self.transformer.ln_f(X)[:, p:]  # (b*k, s, e): keep the option part only
 
         # 3. pool: the mean of the option's own words (everything after [SEP], no padding)
-        is_option = (opt_idx != self.config.pad_id) & (opt_idx != self.config.sep_id)
-        w = is_option.unsqueeze(-1).to(h.dtype)
-        z = ((h * w).sum(1) / w.sum(1).clamp(min=1)).view(B, K, -1)  # (B, K, n_embd)
+        is_option = (options != self.config.pad_id) & (options != self.config.sep_id)  # (b*k, s)
+        w = is_option.unsqueeze(-1).to(H.dtype)  # (b*k, s, 1)
+        Z = ((H * w).sum(1) / w.sum(1).clamp(min=1)).view(b, k, -1)  # (b, k, e)
 
         # 4. the options look at each other, then one logit each (same as TinyDLM)
         for block in self.candidates.h:
-            z = block(z, cand_mask)
-        z = self.candidates.ln_f(z)
-        logits = self.score_head(z).squeeze(-1).masked_fill(~cand_mask, -float('inf'))
+            Z = block(Z, cand_mask)  # (b, k, e)
+        Z = self.candidates.ln_f(Z)
+        logits = self.score_head(Z).squeeze(-1).masked_fill(~cand_mask, -float('inf'))  # (b, k)
 
         loss = None
         if targets is not None:
@@ -163,14 +166,14 @@ class ImageDLM(nn.Module):
 
 def encode_options(texts, tokenizer, device="cpu"):
     """
-        Option texts -> "[SEP] option" token ids, padded: (K, L) long.
+        Option texts -> "[SEP] option" token ids, padded: (k, s) long (k options, s tokens).
         The same K options are used for every frame of the car, so this is built once.
     """
     seqs = [[tokenizer.sep_id] + tokenizer.encode(t) for t in texts]
-    L = max(len(s) for s in seqs)
-    idx = torch.full((len(texts), L), tokenizer.pad_id, dtype=torch.long)
-    for k, s in enumerate(seqs):
-        idx[k, :len(s)] = torch.tensor(s)
+    s = max(len(seq) for seq in seqs)
+    idx = torch.full((len(texts), s), tokenizer.pad_id, dtype=torch.long)
+    for j, seq in enumerate(seqs):
+        idx[j, :len(seq)] = torch.tensor(seq)
     return idx.to(device)
 
 

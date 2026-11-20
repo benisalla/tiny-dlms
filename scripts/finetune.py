@@ -71,7 +71,10 @@ def main(argv=None):
         data = {name: splits[split] for name, splits in tasks.items()}
         get_batch_fns[split] = (lambda data=data: get_multitask_batch(data, cfg.batch_size, tokenizer, device, rng,
                                                                       cfg.max_train_candidates))
-    best = train(model, optimizer, cfg, get_batch_fns,
+    # validation accuracy per dataset during training, on a fixed sample of 300 decisions, with ALL the options
+    val_sample = {name: random.Random(0).sample(splits["val"], min(300, len(splits["val"]))) for name, splits in tasks.items()}
+    eval_fn = lambda m: {f"val_acc/{n}": accuracy(m, d, tokenizer, device) for n, d in val_sample.items()}  # noqa: E731
+    best = train(model, optimizer, cfg, get_batch_fns, eval_fn=eval_fn,
                  ckpt_extra={'stage': 'finetune', 'tokenizer': tokenizer.to_dict(), 'tasks': list(tasks)})
 
     # note: these use the model at the end of training; the checkpoint holds the best-val-loss one.

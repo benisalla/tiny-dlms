@@ -14,8 +14,10 @@ It knows nothing about decisions yet; that is stage 2 (scripts/finetune.py).
 import os
 import random
 
+import torch
+
 from tiny_dlm.config import ModelConfig, TrainConfig
-from tiny_dlm.data import get_mlm_batch, load_text, make_chunks
+from tiny_dlm.data import get_mlm_batch, load_text, make_chunks, mask_tokens
 from tiny_dlm.model import TinyDLM
 from tiny_dlm.runtime import parse_config_args, resolve_device, setup_torch
 from tiny_dlm.tokenizer import WordTokenizer
@@ -50,7 +52,19 @@ def main(argv=None):
         "train": lambda: get_mlm_batch(train_chunks, cfg.batch_size, tokenizer, device, cfg.mask_prob, rng),
         "val": lambda: get_mlm_batch(val_chunks, cfg.batch_size, tokenizer, device, cfg.mask_prob, rng),
     }
-    best = train(model, optimizer, cfg, get_batch_fns,
+    # masked-word accuracy: how often the hidden word is guessed exactly (fixed validation batch of 256 texts)
+    val_idx, val_targets = mask_tokens(val_chunks[:256], tokenizer, cfg.mask_prob, random.Random(0))
+    val_idx, val_targets = val_idx.to(device), val_targets.to(device)
+
+    @torch.no_grad()
+    def eval_fn(m):
+        m.eval()
+        guess = m(val_idx)[0].argmax(-1)  # (b, s): the most likely word at every position
+        m.train()
+        hidden = val_targets != -1
+        return {"val_acc/masked_word": (guess[hidden] == val_targets[hidden]).float().mean().item()}
+
+    best = train(model, optimizer, cfg, get_batch_fns, eval_fn=eval_fn,
                  ckpt_extra={'stage': 'pretrain', 'tokenizer': tokenizer.to_dict()})
     print(f"done, best val loss {best:.4f} -> {os.path.join(cfg.out_dir, cfg.ckpt_name)}")
     return {"best_val_loss": best}

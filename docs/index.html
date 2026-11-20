@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tiny-dlms · little models that choose</title>
+<meta name="description" content="Rhoa and Mēlon: two tiny decision models written from scratch in PyTorch. They do not write answers, they pick one.">
+<style>
+  :root {
+    --bg: #fcfcfb; --surface: #ffffff; --ink: #0b0b0b; --ink-2: #52514e; --muted: #8a8984; --line: #e6e5e1;
+    --accent: #b8860b; --blue: #2a78d6; --orange: #eb6834; --good: #1a8f5a; --bad: #d04545;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121214; --surface: #1a1a1d; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8e88; --line: #2c2c30;
+      --accent: #f2c14e; --blue: #3987e5; --orange: #d95926; --good: #3cbf7f; --bad: #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121214; --surface: #1a1a1d; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #8f8e88; --line: #2c2c30;
+    --accent: #f2c14e; --blue: #3987e5; --orange: #d95926; --good: #3cbf7f; --bad: #e66767;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 0 16px 80px; }
+  a { color: var(--blue); }
+  h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.6rem; margin: 64px 0 8px; letter-spacing: -0.01em; }
+  h3 { margin: 0 0 6px; }
+  p.lead { font-size: 1.15rem; color: var(--ink-2); max-width: 720px; }
+  .muted { color: var(--muted); }
+  code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--line); padding: 1px 6px; border-radius: 6px; }
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; overflow-x: auto; font: 13px/1.5 ui-monospace, Menlo, monospace; }
+  header.top { display: flex; justify-content: space-between; align-items: center; padding: 20px 0; }
+  header.top a { text-decoration: none; color: var(--ink-2); margin-left: 18px; }
+  .hero { padding: 48px 0 8px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 28px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+  .card .name { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+  .card .greek { color: var(--muted); font-style: italic; }
+  .judge { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .judge { grid-template-columns: 1fr; } }
+  video, img.plot { width: 100%; border-radius: var(--radius); border: 1px solid var(--line); background: #000; display: block; }
+  img.plot { background: #fcfcfb; }
+  .plots { display: grid; gap: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-2); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; }
+  /* the interactive demo */
+  .demo { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .tabs button, .btn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer; font: inherit; font-size: 0.9rem; }
+  .tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 600; }
+  label { display: block; font-size: 0.85rem; color: var(--ink-2); margin: 12px 0 4px; }
+  textarea { width: 100%; min-height: 70px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg); color: var(--ink); font: inherit; resize: vertical; }
+  .bars { margin-top: 16px; display: grid; gap: 6px; }
+  .bar { display: grid; grid-template-columns: minmax(120px, 2fr) 3fr 52px; gap: 10px; align-items: center; font-size: 0.92rem; }
+  .bar .track { height: 18px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar .fill { height: 100%; width: 0; background: var(--blue); border-radius: 4px; transition: width 0.6s ease; }
+  .bar.pick .fill { background: var(--good); }
+  .bar.pick.wrong .fill { background: var(--bad); }
+  .bar .opt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar.right .opt::after { content: " ✓"; color: var(--good); }
+  .status { margin-top: 10px; font-size: 0.9rem; color: var(--muted); min-height: 1.4em; }
+  footer { margin-top: 80px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <strong>tiny-dlms</strong>
+    <nav><a href="#try">Try Rhoa</a><a href="#watch">Watch</a><a href="#results">Results</a><a href="https://github.com/benisalla/tiny-dlms">GitHub</a></nav>
+  </header>
+
+  <section class="hero">
+    <h1>Little models that <em>choose</em>.</h1>
+    <p class="lead">An LLM is a <strong>writer</strong>: it invents an answer word by word. A decision model is a
+      <strong>judge</strong>: you give it the situation <em>and the options</em>, it gives every option a score, and
+      the best one wins. Everything here is written from scratch in PyTorch, small enough to train on a laptop.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="name">Rhoa</div>
+        <div class="greek">ῥόα · the pomegranate</div>
+        <p>One little fruit full of seeds, like a decision full of options. Rhoa <strong>reads text</strong>: where is
+          someone in a story, which of 151 intents a request means, the commonsense answer.</p>
+      </div>
+      <div class="card">
+        <div class="name">Mēlon</div>
+        <div class="greek">μῆλον · the golden apple</div>
+        <p>Paris looked at three goddesses and handed the apple to one. Mēlon <strong>looks at images</strong>: from the
+          camera of a race car it picks how much to steer, accelerate or brake.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How a judge works</h2>
+    <p class="muted">Each option is glued to the situation and read on its own by the same Transformer. Every option
+      becomes one number; a softmax over the options turns them into probabilities. No layer knows how many options
+      there are, so the same model picks among 2 or 151.</p>
+<pre>[CLS] mary went to the garden . where is mary ? [SEP] garden    ─┐
+[CLS] mary went to the garden . where is mary ? [SEP] kitchen   ─┼─▶  encoder ─▶ one score each ─▶ softmax ─▶ garden 0.97
+[CLS] mary went to the garden . where is mary ? [SEP] office    ─┘                                          kitchen 0.02 …</pre>
+  </section>
+
+  <section id="try">
+    <h2>Try Rhoa</h2>
+    <p class="muted">Rhoa runs <strong>in your browser</strong> (ONNX). Pick a real test question it never saw in
+      training, or write your own situation and options, one per line.</p>
+    <div class="demo">
+      <div class="tabs" id="tabs"></div>
+      <label for="context">Situation / question</label>
+      <textarea id="context"></textarea>
+      <label for="options">Options (one per line)</label>
+      <textarea id="options" style="min-height:110px"></textarea>
+      <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap">
+        <button class="btn primary" id="decide">Let Rhoa decide</button>
+        <button class="btn" id="another">Another example</button>
+      </div>
+      <div class="status" id="status">Loading Rhoa…</div>
+      <div class="bars" id="bars"></div>
+    </div>
+  </section>
+
+  <section id="watch">
+    <h2>Watch them decide</h2>
+    <div class="judge">
+      <div>
+        <h3>Mēlon drives a track it has never seen</h3>
+        <video src="assets/melon.mp4" controls muted loop playsinline preload="metadata"></video>
+        <p class="muted">Left: the camera. Right: the 15 options with Mēlon's probabilities, the chosen one in green.</p>
+      </div>
+      <div>
+        <h3>Rhoa answers test questions</h3>
+        <video src="assets/rhoa.mp4" controls muted loop playsinline preload="metadata"></video>
+        <p class="muted">Real test questions, right or wrong. For 151 options, the most likely ones are shown.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="results">
+    <h2>Results</h2>
+    <p class="muted">Accuracy on held-out test data, with <strong>all</strong> the options. Does pre-training help? The
+      same Rhoa is fine-tuned twice: once after pre-training on ~1M words, once from random weights.</p>
+    <div id="table"></div>
+    <div class="plots" style="margin-top:20px">
+      <img class="plot" src="assets/plots/rhoa_accuracy.png" alt="Validation accuracy per dataset during training, with and without pre-training">
+      <img class="plot" src="assets/plots/rhoa_loss.png" alt="Decision loss during training, with and without pre-training">
+      <img class="plot" src="assets/plots/rhoa_pretraining.png" alt="Pre-training masked-word loss and accuracy">
+      <img class="plot" src="assets/plots/melon.png" alt="Mēlon loss and steering accuracy">
+      <img class="plot" src="assets/plots/health.png" alt="Learning rate and gradient norm of every run">
+    </div>
+  </section>
+
+  <section>
+    <h2>Run it yourself</h2>
+<pre>git clone https://github.com/benisalla/tiny-dlms && cd tiny-dlms
+pip install -e ".[test,car]"
+python scripts/prepare_data.py         # the datasets
+bash scripts/train_all.sh              # sanity checks, then every model, with logs and graphs
+python scripts/car_drive.py --video melon.mp4</pre>
+    <p class="muted">Read the docs: <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/01-overview.md">overview</a> ·
+      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/02-data.md">data</a> ·
+      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/03-encoder.md">encoder</a> ·
+      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/04-decision-head.md">decision head</a> ·
+      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/05-training.md">training</a></p>
+  </section>
+
+  <footer>tiny-dlms · a learning project · data: bAbI, CLINC150 (CC BY 3.0), Banking77 (CC BY 4.0), CommonsenseQA, CarRacing (Gymnasium)</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const NAMES = { babi: "bAbI", clinc150: "CLINC150 · 151 options", banking77: "Banking77 · 77 options", csqa: "CommonsenseQA" };
+let session, meta, task = "babi", count = {};
+
+// the same word-level tokenizer as tiny_dlm/tokenizer.py
+const split = (text) => text.toLowerCase().match(/[a-z0-9']+|[.?]/g) || [];
+const encode = (text) => split(text).map((w) => meta.stoi[w] ?? meta.unk_id);
+
+function show(example) {
+  $("context").value = example.context;
+  $("options").value = example.options.join("\n");
+  $("options").dataset.answers = JSON.stringify(example.answers || []);
+  $("bars").innerHTML = "";
+}
+
+function tabs() {
+  $("tabs").innerHTML = "";
+  for (const t of Object.keys(meta.examples)) {
+    const b = document.createElement("button");
+    b.textContent = NAMES[t] || t;
+    b.setAttribute("aria-pressed", t === task);
+    b.onclick = () => { task = t; tabs(); next(); };
+    $("tabs").appendChild(b);
+  }
+}
+
+function next() {
+  const list = meta.examples[task];
+  count[task] = ((count[task] ?? -1) + 1) % list.length;
+  show(list[count[task]]);
+}
+
+async function decide() {
+  const context = $("context").value.trim();
+  const options = $("options").value.split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!context || options.length < 2) { $("status").textContent = "Write a situation and at least two options."; return; }
+  // one "[CLS] context [SEP] option" sequence per option, padded to the same length s
+  const ctx = encode(context);
+  const seqs = options.map((o) => [meta.cls_id, ...ctx, meta.sep_id, ...encode(o)].slice(0, meta.block_size));
+  const k = seqs.length, s = Math.max(...seqs.map((q) => q.length));
+  const idx = new BigInt64Array(k * s).fill(BigInt(meta.pad_id));
+  seqs.forEach((q, j) => q.forEach((id, m) => { idx[j * s + m] = BigInt(id); }));
+  const t0 = performance.now();
+  const out = await session.run({
+    idx: new ort.Tensor("int64", idx, [1, k, s]),
+    cand_mask: new ort.Tensor("bool", new Uint8Array(k).fill(1), [1, k]),
+  });
+  const probs = Array.from(out.probs.data);
+  const answers = JSON.parse($("options").dataset.answers || "[]");
+  const order = probs.map((p, j) => j).sort((a, b) => probs[b] - probs[a]).slice(0, 10);
+  const pick = order[0];
+  $("bars").innerHTML = "";
+  for (const j of order) {
+    const row = document.createElement("div");
+    const right = answers.includes(options[j]);
+    row.className = "bar" + (j === pick ? " pick" : "") + (j === pick && answers.length && !right ? " wrong" : "") + (right ? " right" : "");
+    row.innerHTML = `<span class="opt"></span><span class="track"><span class="fill"></span></span><span class="num">${(probs[j] * 100).toFixed(0)}%</span>`;
+    row.querySelector(".opt").textContent = options[j];
+    $("bars").appendChild(row);
+    requestAnimationFrame(() => { row.querySelector(".fill").style.width = (probs[j] * 100).toFixed(1) + "%"; });
+  }
+  const verdict = answers.length ? (answers.includes(options[pick]) ? " · right ✓" : ` · wrong (right answer: ${answers.join(" | ")})`) : "";
+  $("status").textContent = `Rhoa picked “${options[pick]}” among ${k} options in ${(performance.now() - t0).toFixed(0)} ms${verdict}` + (k > 10 ? " · showing the top 10" : "");
+}
+
+async function start() {
+  try {
+    meta = await (await fetch("demo/rhoa.json")).json();
+    meta.stoi = Object.fromEntries(meta.vocab.map((w, i) => [w, i]));
+    session = await ort.InferenceSession.create("demo/rhoa.onnx");
+    tabs(); next();
+    $("status").textContent = "Rhoa is ready.";
+  } catch (e) {
+    $("status").textContent = "Could not load Rhoa: " + e.message;
+  }
+}
+
+async function results() {
+  try {
+    const r = await (await fetch("assets/results.json")).json();
+    if (!r.test) return;
+    let html = "<table><tr><th>Dataset</th><th>Options</th><th>Rhoa with pre-training</th><th>Rhoa without</th><th>Random guess</th></tr>";
+    for (const [t, v] of Object.entries(r.test)) {
+      html += `<tr><td>${NAMES[t] || t}</td><td class="num">${v.options}</td><td class="num"><strong>${(v.with_pretraining * 100).toFixed(1)}%</strong></td><td class="num">${(v.without_pretraining * 100).toFixed(1)}%</td><td class="num">${(v.random * 100).toFixed(1)}%</td></tr>`;
+    }
+    if (r.melon_drive) {
+      html += `<tr><td>Mēlon · CarRacing (score, unseen tracks)</td><td class="num">15</td><td class="num" colspan="2"><strong>${r.melon_drive.model.toFixed(0)}</strong> (teacher ${r.melon_drive.teacher.toFixed(0)})</td><td class="num">${r.melon_drive.random.toFixed(0)}</td></tr>`;
+    }
+    $("table").innerHTML = html + "</table>";
+  } catch (e) { /* results not published yet */ }
+}
+
+$("decide").onclick = decide;
+$("another").onclick = () => { next(); decide(); };
+start(); results();
+</script>
+</body>
+</html>

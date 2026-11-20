@@ -140,7 +140,7 @@ class TinyDLM(nn.Module):
         """
         if self.config.pool == "cls":
             return H[:, 0]  # (b, e): the vector at position 0
-        after_sep = (idx == self.config.sep_id).cumsum(dim=-1) > 0  # (b, s): True from [SEP] on
+        after_sep = (idx == self.config.sep_id).long().cumsum(dim=-1) > 0  # (b, s): True from [SEP] on
         is_option = after_sep & (idx != self.config.sep_id) & (idx != self.config.pad_id)  # (b, s)
         w = is_option.unsqueeze(-1).to(H.dtype)  # (b, s, 1): 1 on the option's own tokens
         return (H * w).sum(dim=1) / w.sum(dim=1).clamp(min=1)  # (b, e) mean; empty slots -> zeros

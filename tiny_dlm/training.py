@@ -1,4 +1,5 @@
 """Training utilities shared by pre-training (scripts/train.py) and fine-tuning (scripts/finetune.py)."""
+import json
 import math
 import os
 import time
@@ -54,13 +55,37 @@ def accuracy(model, decisions, tokenizer, device, max_sequences=4096):
     return correct / len(decisions)
 
 
-def train(model, optimizer, cfg, get_batch_fns, iter_num=0, best_val_loss=float('inf'), ckpt_extra=None):
+class MetricsLog:
+    """
+    Every number worth plotting, one JSON line per event, in `{out_dir}/{ckpt_name}.metrics.jsonl`:
+
+        {"kind": "train", "step": 100, "loss": 1.21, "lr": 0.001, "grad_norm": 0.8, "ms_per_step": 95}
+        {"kind": "eval",  "step": 500, "train_loss": 1.1, "val_loss": 1.2, "val_acc/clinc150": 0.41, ...}
+
+    scripts/plot_metrics.py turns these files into graphs.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        open(path, "w").close()  # a new run starts a new file
+
+    def write(self, **record):
+        with open(self.path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+
+
+def train(model, optimizer, cfg, get_batch_fns, iter_num=0, best_val_loss=float('inf'), ckpt_extra=None,
+          eval_fn=None):
     """
     The optimisation loop: gradient accumulation, grad clipping, lr schedule,
     periodic evaluation and checkpointing (best val loss -> `{out_dir}/{ckpt_name}`).
+    `eval_fn(model)` -> {"val_acc/babi": 0.9, ...}: extra numbers measured at every evaluation (accuracy...).
+    Everything is also written to `{out_dir}/{ckpt_name}.metrics.jsonl` (see MetricsLog).
     Returns the best validation loss.
     """
     ckpt_path = os.path.join(cfg.out_dir, cfg.ckpt_name)
+    log = MetricsLog(ckpt_path + ".metrics.jsonl")
     trainable = [p for p in model.parameters() if p.requires_grad]
     model.train()
 
@@ -74,7 +99,10 @@ def train(model, optimizer, cfg, get_batch_fns, iter_num=0, best_val_loss=float(
         # evaluate the loss on train/val sets and write checkpoints
         if iter_num % cfg.eval_interval == 0 or iter_num == cfg.max_iters:
             losses = estimate_loss(model, get_batch_fns, cfg.eval_iters)
-            print(f"Val-Step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+            extra = eval_fn(model) if eval_fn else {}
+            print(f"Val-Step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+                  + "".join(f", {k} {v:.3f}" for k, v in extra.items()))
+            log.write(kind="eval", step=iter_num, train_loss=losses['train'], val_loss=losses['val'], **extra)
             if losses['val'] < best_val_loss or cfg.always_save_checkpoint:
                 best_val_loss = min(best_val_loss, losses['val'])
                 if iter_num > 0:
@@ -91,8 +119,8 @@ def train(model, optimizer, cfg, get_batch_fns, iter_num=0, best_val_loss=float(
             batch = get_batch_fns['train']()  # next batch
             loss.backward()
 
-        if cfg.grad_clip != 0.0:
-            torch.nn.utils.clip_grad_norm_(trainable, cfg.grad_clip)
+        # the gradient norm before clipping: a spike warns that training is getting unstable
+        grad_norm = torch.nn.utils.clip_grad_norm_(trainable, cfg.grad_clip if cfg.grad_clip else float('inf'))
 
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
@@ -100,11 +128,15 @@ def train(model, optimizer, cfg, get_batch_fns, iter_num=0, best_val_loss=float(
         t1 = time.time()
         dt = t1 - t0
         t0 = t1
-        if iter_num % cfg.log_interval == 0:
+        if iter_num % cfg.log_interval == 0:  # .item() waits for the GPU: only every log_interval steps
             lossf = loss.item() * cfg.grad_accum_steps
-            print(f"iter {iter_num}: loss {lossf:.4f}, lr {lr:.2e}, time {dt * 1000:.2f}ms")
+            print(f"iter {iter_num}: loss {lossf:.4f}, lr {lr:.2e}, grad norm {grad_norm.item():.2f}, "
+                  f"time {dt * 1000:.2f}ms")
+            log.write(kind="train", step=iter_num, loss=lossf, lr=lr, grad_norm=grad_norm.item(), ms_per_step=dt * 1000)
         iter_num += 1
 
+    if not os.path.exists(ckpt_path):  # the val loss never improved: still save the model we have
+        save_checkpoint(ckpt_path, model, optimizer, model.config.to_dict(), iter_num, best_val_loss, extra=ckpt_extra)
     return best_val_loss
 
 

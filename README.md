@@ -362,50 +362,61 @@ pip install -e ".[car]"
 python scripts/car_record.py          # teacher drives 40 + 5 tracks -> data/car/{train,val}.pt (~35k frames)
 python scripts/car_sanity_check.py    # 11 health checks + a picture of the data, before training
 python scripts/car_train.py           # -> checkpoints/car.pt
-python scripts/car_drive.py --gif docs/assets/car.gif   # drive new tracks: model vs teacher vs straight vs random
+python scripts/car_drive.py --video docs/assets/melon.mp4   # drive new tracks: model vs teacher vs straight vs random
 ```
 
 ## Run it
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
-.venv/bin/pip install -e ".[test]"
+.venv/bin/pip install -e ".[test,car]"           # torch, pytest, gymnasium[box2d] for the car, pillow
 
-.venv/bin/python scripts/prepare_babi.py     # download bAbI, build data/babi/*
-.venv/bin/python scripts/train.py            # stage 1 -> checkpoints/pretrain.pt
-.venv/bin/python scripts/finetune.py         # stage 2 -> checkpoints/finetune.pt
-.venv/bin/python scripts/ask.py --context "Mary moved to the bathroom. John went to the hallway. Where is Mary?" \
-                                --candidates "bathroom | hallway"
-.venv/bin/python scripts/sanity_check.py     # 12 neural-network sanity checks, ~30 s on CPU
-.venv/bin/pytest                             # tests
+.venv/bin/python scripts/prepare_babi.py          # bAbI (already in data/babi)
+.venv/bin/python scripts/prepare_data.py          # CLINC150, Banking77, CommonsenseQA + pre-training text
+.venv/bin/python scripts/car_record.py            # the teacher drives 45 tracks -> data/car
+
+QUICK=1 bash scripts/train_all.sh                 # the whole pipeline with 20 steps per stage (~8 min): checks it all works
+bash scripts/train_all.sh                         # the real run, one model after the other (a few hours)
+.venv/bin/pytest                                  # tests
+```
+
+`scripts/train_all.sh` runs, in order: the health checks (`sanity_check.py`, `car_sanity_check.py`), Mēlon,
+Rhoa's pre-training and fine-tuning, Rhoa without pre-training, the final test on held-out data
+(`evaluate_all.py`), the graphs (`plot_metrics.py`), the videos (`car_drive.py`, `rhoa_demo.py`) and the web demo
+(`export_web.py`). Every run writes its numbers to `checkpoints/<model>.pt.metrics.jsonl`: loss, learning rate,
+gradient norm and speed every 100 steps; train/val loss and accuracy per dataset every 500 steps.
+
+Ask a trained model directly:
+
+```bash
+.venv/bin/python scripts/ask.py --ckpt checkpoints/rhoa.pt \
+    --context "Mary moved to the bathroom. John went to the hallway. Where is Mary?" --candidates "bathroom | hallway"
+.venv/bin/python scripts/car_drive.py --ckpt checkpoints/melon.pt --video melon.mp4
 ```
 
 **Training on a GPU (Colab / Kaggle):** open `notebooks/Tiny_DLM(Training).ipynb`. It is self-contained (every class
-is in it, no install), downloads bAbI, runs the sanity checks, pre-trains, fine-tunes and reports test accuracy.
-Checkpoints go to Google Drive on Colab, `/kaggle/working` on Kaggle. After changing the package, rebuild it with
-`python scripts/build_notebook.py`.
+is in it, no install) and covers the bAbI pipeline: it downloads bAbI, runs the sanity checks, pre-trains, fine-tunes
+and reports test accuracy. After changing the package, rebuild it with `python scripts/build_notebook.py`.
 
 Every config field is a flag: `--n_layer 4 --n_embd 128 --max_iters 5000 --learning_rate 3e-4 ...`.
+The device is picked automatically: CUDA if available, then Apple MPS, then CPU (`--device` to force one).
 
 ## Results
 
-Not trained to the end yet.
+Full training results (test accuracy with and without pre-training, Mēlon's score on unseen tracks, graphs and
+videos) are written to `docs/assets/` by `scripts/train_all.sh` and shown on the project page (`docs/index.html`).
 
-**Sanity checks** (`scripts/sanity_check.py`, on the real bAbI data): 12/12 pass. Initial loss = random guessing
-(1.315 vs mean log K 1.320; 4.90 vs log vocab 5.02), every parameter gets a gradient, decisions in a batch do not
-leak into each other, shuffling the candidates only shuffles the probabilities, K = 2, 3, 7, 10 all work, and the
-model memorises 16 decisions in 35 steps and 8 masked-word examples in 76 steps.
+**What the experiments showed so far (bAbI task 1):**
 
-**Pooling matters (a bug found by the sanity checks).** The first version scored each candidate from the `[CLS]`
-vector, like BERT. Fine-tuning stayed at random guessing (val loss 1.33 = mean log K), and the sanity check showed
-why: with `[CLS]` pooling the model could not even memorise 16 decisions (81% after 300 steps). At the start of
-training `[CLS]` looks at all ~70 tokens equally, and the only token that differs between candidates is ~1/70 of
-what it sees, so the gradient that would tell candidates apart is tiny. Averaging the candidate's **own** tokens
-instead (`pool="candidate"`, now the default) starts each candidate from its own word: 100% after 35 steps.
-
-**Pre-training:** best val loss 0.588 (masked words, from 4.94 at init), with the earlier `[CLS]` version
-(pooling has no weights, so this checkpoint is still usable).
+- The 2-layer, 64-wide model learns a shortcut, "answer the last place mentioned" (52.7% on test), and stays there.
+  A 4-layer, 128-wide model trained for 8,000 steps finds the real rule ("the last place *this person* went") and
+  reaches **99.3%** test accuracy. Width and training time mattered more than depth alone.
+- **The health checks found a dead parameter.** `score_head` had a bias, but adding the same number to every
+  option's score does not change the softmax, so its gradient was always 0. It was removed.
+- **Pooling.** The first version scored each option from the `[CLS]` vector, like BERT, and could not memorise 16
+  decisions. Averaging the option's own tokens (`pool="candidate"`, the default) memorises them in ~35 steps. Since
+  the dead bias was removed, `[CLS]` pooling memorises them too (~180 steps): `pool="candidate"` is still the
+  default because it learns several times faster.
 
 ## Files
 
@@ -417,14 +428,25 @@ instead (`pool="candidate"`, now the default) starts each candidate from its own
 | `tiny_dlm/attention.py` | bidirectional self-attention with padding mask, multi-head / grouped-query |
 | `tiny_dlm/mlp.py` | classic MLP or SwiGLU |
 | `tiny_dlm/block.py` | `EBlock`: pre-norm encoder block |
-| `tiny_dlm/model.py` | `TinyDLM`: pair encoder, candidate layer, score head, MLM head, `decide()` |
+| `tiny_dlm/model.py` | `TinyDLM` (Rhoa): pair encoder, candidate layer, score head, MLM head, `decide()` |
 | `tiny_dlm/tokenizer.py` | word-level tokenizer with `[CLS] [SEP] [MASK]` |
 | `tiny_dlm/data.py` | decision CSVs and batches, masked-word batches |
 | `tiny_dlm/training.py` | lr schedule, training loop, loss estimate, accuracy |
 | `tiny_dlm/checkpoint.py` | save / load (with the tokenizer) |
+| `tiny_dlm/sanity.py` | standard health checks shared by both sanity scripts |
+| `tiny_dlm/vision.py` | `ImageDLM` (Mēlon): image patches + option words -> one score per option |
+| `tiny_dlm/car.py` | CarRacing: the 15 options, the teacher driver, frame preprocessing |
 | `scripts/prepare_babi.py` | bAbI -> decisions + pre-training text |
-| `scripts/train.py` / `finetune.py` / `ask.py` | stage 1 / stage 2 / ask a question |
-| `scripts/sanity_check.py` | 12 fast checks of the data, the network and the pipeline |
+| `scripts/prepare_data.py` | CLINC150, Banking77, CommonsenseQA -> decisions + shared pre-training text |
+| `scripts/train.py` / `finetune.py` / `ask.py` | stage 1 / stage 2 (one or several datasets) / ask a question |
+| `scripts/sanity_check.py` / `car_sanity_check.py` | health checks of Rhoa / Mēlon before training |
+| `scripts/car_record.py` / `car_train.py` / `car_drive.py` | record the teacher / train Mēlon / drive (+ video) |
+| `scripts/train_all.sh` | the whole pipeline, in order (`QUICK=1` for a fast end-to-end check) |
+| `scripts/evaluate_all.py` | final test of every model -> `docs/assets/results.json` |
+| `scripts/plot_metrics.py` | training graphs -> `docs/assets/plots/` |
+| `scripts/rhoa_demo.py` | demo video of Rhoa answering test questions |
+| `scripts/export_web.py` | Rhoa -> ONNX + vocabulary for the web demo (`docs/demo/`) |
 | `scripts/build_notebook.py` | builds the Colab / Kaggle notebook from the package code |
-| `notebooks/Tiny_DLM(Training).ipynb` | everything in one notebook, to train on a GPU |
-| `tests/` | layers, model, data, training pipeline, sanity checks |
+| `notebooks/Tiny_DLM(Training).ipynb` | the bAbI pipeline in one notebook, to train on a GPU |
+| `docs/index.html` | the project page (GitHub Pages): try Rhoa in the browser, videos, results |
+| `tests/` | input -> expected output tests for layers, model, data, images, training pipeline |

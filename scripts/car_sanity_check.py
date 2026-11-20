@@ -47,6 +47,7 @@ def main(argv=None):
     parser.add_argument("--data_dir", default="data/car")
     parser.add_argument("--n_layer", type=int, default=2)
     parser.add_argument("--n_embd", type=int, default=64)
+    parser.add_argument("--n_head", type=int, default=4)
     parser.add_argument("--picture", default="checkpoints/car_batch.png")
     args = parser.parse_args(argv)
     torch.manual_seed(0)
@@ -72,7 +73,7 @@ def main(argv=None):
 
     print("model")
     tok = WordTokenizer.from_texts(texts)
-    cfg = ModelConfig(vocab_size=len(tok), block_size=48, n_layer=args.n_layer, n_embd=args.n_embd, n_head=4,
+    cfg = ModelConfig(vocab_size=len(tok), block_size=48, n_layer=args.n_layer, n_embd=args.n_embd, n_head=args.n_head,
                       drop_rate=0.0, pad_id=tok.pad_id, sep_id=tok.sep_id)  # no dropout: checks are deterministic
     build = lambda: ImageDLM(cfg)  # noqa: E731
     ids, mask = encode_options(texts, tok).expand(64, -1, -1), torch.ones(64, k, dtype=torch.bool)

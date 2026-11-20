@@ -81,7 +81,11 @@ def main(argv=None):
     rng = random.Random(cfg.seed)
     get_batch_fns = {"train": make_batch_fn(train_images, train_labels, option_idx, cfg.batch_size, device, rng),
                      "val": make_batch_fn(val_images, val_labels, option_idx, cfg.batch_size, device, rng)}
-    best = train(model, optimizer, cfg, get_batch_fns,
+    def eval_fn(m):  # steering accuracy on 1,000 fixed validation frames
+        exact, close = option_accuracy(m, val_images[:1000], val_labels[:1000], option_idx, device)
+        return {"val_acc/exact": exact, "val_acc/within_one_notch": close}
+
+    best = train(model, optimizer, cfg, get_batch_fns, eval_fn=eval_fn,
                  ckpt_extra={"stage": "car", "tokenizer": tokenizer.to_dict(), "option_texts": option_texts,
                              "image_args": model.image_args})
 

@@ -41,7 +41,7 @@ def main(argv=None):
     model_cfg.vocab_size = len(tokenizer)
     model_cfg.pad_id, model_cfg.sep_id = tokenizer.pad_id, tokenizer.sep_id
     model = TinyDLM(model_cfg).to(device)
-    print(f"number of parameters: {model.get_num_params() / 1e3:.1f}K | vocab: {len(tokenizer)} | "
+    print(f"Rhoa | number of parameters: {model.get_num_params() / 1e3:.1f}K | vocab: {len(tokenizer)} | "
           f"texts: {len(train_texts)} -> {len(train_chunks)} chunks | device: {device}")
 
     optimizer = build_optimizer(model, cfg, device)

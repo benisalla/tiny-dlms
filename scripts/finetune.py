@@ -62,7 +62,7 @@ def main(argv=None):
         # the architecture and the vocabulary come from the pre-trained checkpoint
         model, tokenizer, _ = load_checkpoint(cfg.init_from, device)
         print(f"starting from the pre-trained model {cfg.init_from}")
-    print(f"number of parameters: {model.get_num_params() / 1e3:.1f}K | vocab: {len(tokenizer)} | device: {device}")
+    print(f"Rhoa | number of parameters: {model.get_num_params() / 1e3:.1f}K | vocab: {len(tokenizer)} | device: {device}")
 
     optimizer = build_optimizer(model, cfg, device)
     rng = random.Random(cfg.seed)

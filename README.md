@@ -7,6 +7,17 @@ Every layer is written by hand (no Hugging Face `transformers`), with the same s
 
 **Note:** this is a learning project, not a production system.
 
+## The models
+
+Two little models, named after Greek fruits:
+
+| Name | Reads | Picks |
+|---|---|---|
+| **Rhoa** (ῥόα, *the pomegranate*): one little fruit full of seeds, like a decision full of options | text | an answer, an intent, a commonsense choice |
+| **Mēlon** (μῆλον, *the golden apple*): Paris looked at three goddesses and handed the apple to one | images | how to steer a car |
+
+Both are the same judge (`TinyDLM` and `ImageDLM` in the code; `from tiny_dlm import Rhoa, Melon` also works).
+
 ## Documentation
 
 | | Read this to understand |
@@ -324,7 +335,7 @@ python scripts/finetune.py --tasks babi,clinc150,banking77,csqa  # stage 2: ONE 
 - **Vocabulary:** words seen at least twice in the pre-training text (`--min_freq 2`), plus every word that appears
   in an option (`data/pretrain/options.txt`), so a possible answer is never `<unk>`.
 
-## Decisions from images: a car that drives itself (`tiny_dlm/vision.py`, `tiny_dlm/car.py`)
+## Decisions from images: Mēlon drives a car (`tiny_dlm/vision.py`, `tiny_dlm/car.py`)
 
 The same judge, but the context is a **camera image** instead of words. `ImageDLM` cuts the frame into patches
 (like a ViT) and reads `[patches] [SEP] option` with the same encoder blocks, candidate layer and score head:

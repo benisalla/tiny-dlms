@@ -4,5 +4,10 @@ from tiny_dlm.config import ModelConfig, TrainConfig
 from tiny_dlm.data import Decision, collate, get_batch, get_mlm_batch, load_csv, load_text, make_chunks, mask_tokens
 from tiny_dlm.model import TinyDLM
 from tiny_dlm.tokenizer import WordTokenizer
+from tiny_dlm.vision import ImageDLM
+
+# The models' names: Greek fruits.
+Rhoa = TinyDLM  # ῥόα, pomegranate: one fruit full of seeds, like a decision full of options. Reads text.
+Melon = ImageDLM  # μῆλον, the golden apple of the Judgment of Paris, who looked and picked one. Reads images.
 
 __version__ = "0.1.0"

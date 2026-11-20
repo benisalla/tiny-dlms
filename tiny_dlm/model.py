@@ -12,7 +12,7 @@ from tiny_dlm.rope import RotaryEmbedding
 
 class TinyDLM(nn.Module):
     """
-    Tiny DLM: a Jev-style decision model.
+    Rhoa (ῥόα, pomegranate): the text decision model. A Jev-style decision model.
 
     An LLM *generates* the answer token by token. A decision model gets a list of candidate answers
     and *scores all of them in one forward pass*, then a softmax over the candidates gives one

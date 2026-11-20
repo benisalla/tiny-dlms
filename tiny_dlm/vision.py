@@ -1,5 +1,6 @@
 """
-ImageDLM: a decision model that looks at an IMAGE and picks one option written in words.
+Mēlon (μῆλον, the golden apple): ImageDLM, a decision model that looks at an IMAGE and picks one option
+written in words.
 
 It is TinyDLM with the context made of image patches instead of words:
 

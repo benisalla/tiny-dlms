@@ -74,7 +74,7 @@ def main(argv=None):
 
     model_cfg.vocab_size, model_cfg.pad_id, model_cfg.sep_id = len(tokenizer), tokenizer.pad_id, tokenizer.sep_id
     model = ImageDLM(model_cfg).to(device)
-    print(f"number of parameters: {model.get_num_params() / 1e3:.1f}K | frames: train {len(train_labels):,}, "
+    print(f"Mēlon | number of parameters: {model.get_num_params() / 1e3:.1f}K | frames: train {len(train_labels):,}, "
           f"val {len(val_labels):,} | {len(option_texts)} options | device: {device}")
 
     optimizer = build_optimizer(model, cfg, device)

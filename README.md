@@ -487,26 +487,35 @@ with **all** the options. Graphs, videos and the interactive demo are on the pro
 | drives CarRacing, 5 unseen tracks (4x128 / 2x64) | **913 / 913** | 913 | always straight -26, random -40 |
 | plays mazes, 200 unseen (8x128 / 4x128) | **97.0%** / 50.0% solved, always on the shortest path | 100% | greedy 74% (paths 1.47x longer), random 8.5% |
 
-### Real pre-training: 1.5 GB of web text
+### Real pre-training on web text
 
-Rhoa 4x128 pre-trained on 1.5 GB of FineWeb-Edu (359M tokens, 30,000 steps, ~1.4 passes; `scripts/web_pretrain.sh`),
-then fine-tuned like every other model. Its twin has the same tokenizer and the same fine-tuning, without
-pre-training, so the difference is the pre-training alone.
+Each model is pre-trained on web text (FineWeb-Edu), then fine-tuned like every other model. Its twin has the same
+size, the same tokenizer and the same fine-tuning, without pre-training: the difference is the pre-training alone.
+
+- Round 1 (`scripts/web_pretrain.sh`): Rhoa 4x128 on 1.5 GB (359M tokens, 30,000 steps).
+- Round 2 (`scripts/web_pretrain_all.sh`): every version on 2 GB (479M tokens, 40,000 steps, the same tokenizer).
 
 ![pre-training gain](docs/assets/plots/pretraining_gain.png)
 
-| Rhoa 4x128, test accuracy | bAbI | CLINC150 | Banking77 | CommonsenseQA |
+| Test accuracy: twin / pre-trained (gain) | bAbI | CLINC150 | Banking77 | CommonsenseQA |
 |---|---|---|---|---|
-| web BPE tokenizer, no pre-training | 88.1% | 65.4% | 80.6% | 17.4% |
-| **pre-trained on 1.5 GB of web text** | **99.9%** | **71.6%** | **85.3%** | **18.5%** |
-| gain from web pre-training | **+11.8** | **+6.2** | **+4.7** | +1.1 |
-| *for comparison: gain from the 4.6 MB in-domain pre-training (word)* | *-9.1* | *+4.9* | *+3.5* | *+2.1* |
+| Rhoa 4x128, 1.5 GB of web text | 88.1 / **99.9** (+11.8) | 65.4 / 71.6 (+6.2) | 80.6 / **85.3** (+4.7) | 17.4 / 18.5 (+1.1) |
+| Rhoa 4x128, 2 GB of web text | 88.1 / **100.0** (+11.9) | 65.4 / **72.6** (+7.2) | 80.6 / 84.4 (+3.8) | 17.4 / 20.8 (+3.4) |
+| Rhoa 2x64, 2 GB of web text | 71.5 / 81.4 (+9.9) | 63.2 / 67.6 (+4.4) | 79.3 / 83.0 (+3.7) | 17.0 / 17.6 (+0.6) |
+| Rhoa GPT-2 blocks, 2 GB of web text | 49.6 / 99.7 (**+50.1**) | 64.9 / 68.4 (+3.5) | 77.3 / 82.1 (+4.8) | 18.6 / 21.1 (+2.5) |
+| *for comparison: Rhoa 4x128 on our 4.6 MB of task text (word tokenizer)* | *98.9 / 89.8 (-9.1)* | *66.4 / 71.3 (+4.9)* | *79.6 / 83.1 (+3.5)* | *15.5 / 17.6 (+2.1)* |
 
-- **Web pre-training helps on every dataset** and gives the best model of the project (99.9% on bAbI, 85.3% on
-  Banking77). The small in-domain pre-training even hurt bAbI; general text does not.
-- During pre-training the model went from 10% to 46.6% of hidden tokens guessed right, with the validation loss
-  following the training loss all along: every window is new text, so it learns the language instead of memorising.
-- CommonsenseQA stays near random: 2.4M weights cannot store world knowledge, even after reading 1.5 GB.
+- **Web pre-training helps every model on every dataset**, and it gives the best models of the project: 100% on
+  bAbI, 72.6% on CLINC150 and 85.3% on Banking77.
+- **Pre-training is not "always good", it depends on what you read.** The small pre-training on our own task text
+  (4.6 MB) cost 9 points on bAbI; general web text gains 12 on the same model.
+- **It rescues the models that could not learn alone.** GPT-2 blocks without pre-training never found the bAbI rule
+  (49.6%, the shortcut level); after reading the web they reach 99.7%.
+- **More text, better language model, small extra gain on the tasks.** 2 GB instead of 1.5 GB (and 40k steps instead
+  of 30k) lowered the pre-training loss (2.97 to 2.90, 46.6% to 47.7% of hidden tokens guessed), and moved the tasks
+  by about one point either way: at this size, the 2.4M weights limit the model more than the data does.
+- **CommonsenseQA stays at random level** (20%): no amount of reading fits world knowledge into a few million
+  weights.
 
 ### Word tokenizer vs BPE
 

@@ -36,7 +36,7 @@ class Probabilities(torch.nn.Module):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--ckpt", default="checkpoints/rhoa.pt")
+    parser.add_argument("--ckpt", default="checkpoints/rhoa_web2.pt")  # the best model: pre-trained on 2 GB of web text
     parser.add_argument("--out_dir", default="docs/demo")
     parser.add_argument("--data_root", default="data")
     parser.add_argument("--tasks", default="babi,clinc150,banking77,csqa")
@@ -71,7 +71,8 @@ def main(argv=None):
         assert np.abs(a - b).max() < 1e-4, f"ONNX and PyTorch disagree on {task}: {np.abs(a - b).max()}"
 
     bpe = type(tokenizer).__name__ == "BPETokenizer"
-    tok_meta = ({"tokenizer": "bpe", "merges": [list(m) for m in tokenizer.merges], "first_byte": tokenizer.first_byte}
+    tok_meta = ({"tokenizer": "bpe", "merges": [list(m) for m in tokenizer.merges], "first_byte": tokenizer.first_byte,
+                 "prefix_space": tokenizer.prefix_space}
                 if bpe else {"tokenizer": "word", "vocab": tokenizer.itos})
     # the web page re-implements the tokenizer: keep a few texts and their ids so it can be checked against Python
     checks = ["I lost my card yesterday, what should I do?", "where is mary ?", "vaccinations for café 42!"]

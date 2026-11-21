@@ -221,14 +221,14 @@ def main(argv=None):
         save(fig, args.out, "tokenizers.png", bottom=0.2)
 
     # 9. what pre-training adds: each pre-trained model next to its twin trained from scratch (same tokenizer)
-    pairs = [("rhoa_scratch", "rhoa", "4x128 · word\n4.6 MB in-domain"),
-             ("rhoa_web_scratch", "rhoa_web", "4x128 · web BPE\n1.5 GB web"),
-             ("rhoa_web_scratch", "rhoa_web2", "4x128 · web BPE\n2 GB web"),
-             ("rhoa_small_web_scratch", "rhoa_small_web2", "2x64 · web BPE\n2 GB web"),
-             ("rhoa_gpt2_web_scratch", "rhoa_gpt2_web2", "GPT-2 blocks · web BPE\n2 GB web")]
+    pairs = [("rhoa_scratch", "rhoa", "4x128\n4.6 MB\nours"),  # word tokenizer, pre-trained on our tasks' text
+             ("rhoa_web_scratch", "rhoa_web", "4x128\n1.5 GB\nweb"),  # web BPE from here on
+             ("rhoa_web_scratch", "rhoa_web2", "4x128\n2 GB\nweb"),
+             ("rhoa_small_web_scratch", "rhoa_small_web2", "2x64\n2 GB\nweb"),
+             ("rhoa_gpt2_web_scratch", "rhoa_gpt2_web2", "GPT-2\n2 GB\nweb")]
     pairs = [p for p in pairs if all(p[0] in row["models"] and p[1] in row["models"] for row in test.values())]
     if len(pairs) > 1:
-        fig, axes = plt.subplots(1, len(test), figsize=(13, 3.8), sharey=True, squeeze=False)
+        fig, axes = plt.subplots(1, len(test), figsize=(14, 4.2), sharey=True, squeeze=False)
         for ax, (task, row) in zip(axes[0], test.items()):
             xs = list(range(len(pairs)))
             none = [row["models"][a] for a, _, _ in pairs]
@@ -238,7 +238,7 @@ def main(argv=None):
             for x, (a, b) in enumerate(zip(none, pre)):
                 ax.text(x + 0.2, b + 0.01, f"{(b - a) * 100:+.0f}", ha="center", fontsize=8, color=INK)
             ax.axhline(row["baselines"]["random"], color=INK, linewidth=1, linestyle=":")
-            ax.set_xticks(xs, [label for _, _, label in pairs], fontsize=6.5)
+            ax.set_xticks(xs, [label for _, _, label in pairs], fontsize=7)
             ax.set_title(NAMES.get(task, task))
             ax.grid(axis="x", visible=False)
         axes[0][0].yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
@@ -247,7 +247,7 @@ def main(argv=None):
         fig.legend(handles, labels, fontsize=9, ncol=2, loc="lower center", bbox_to_anchor=(0.5, 0.0))
         fig.suptitle("What pre-training adds · each model next to its twin trained from scratch "
                      "(numbers: points gained; dotted: random guessing)", color=INK)
-        save(fig, args.out, "pretraining_gain.png", bottom=0.22)
+        save(fig, args.out, "pretraining_gain.png", bottom=0.26)
 
     merged["validation"] = results
     with open(path, "w") as f:

@@ -214,7 +214,10 @@ function bpeChunk(chunk) {  // bytes -> apply the learned merges, earliest learn
   bpeCache.set(chunk, ids);
   return ids;
 }
-const bpeEncode = (text) => (text.toLowerCase().match(SPLIT) || []).flatMap(bpeChunk);
+const bpeEncode = (text) => {  // prefix_space: every text starts with a space, as in tiny_dlm/tokenizer.py
+  if (meta.prefix_space && !text.startsWith(" ")) text = " " + text;
+  return (text.toLowerCase().match(SPLIT) || []).flatMap(bpeChunk);
+};
 const encode = (text) => (meta.tokenizer === "bpe" ? bpeEncode(text) : wordEncode(text));
 
 function show(example) {

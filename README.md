@@ -437,20 +437,49 @@ The device is picked automatically: CUDA if available, then Apple MPS, then CPU 
 
 ## Results
 
-Full training results (test accuracy with and without pre-training, Mēlon's score on unseen tracks, graphs and
-videos) are written to `docs/assets/` by `scripts/train_all.sh` and shown on the project page (`docs/index.html`).
+Everything below is measured on **held-out test data** (never used for training or for choosing a checkpoint),
+with **all** the options. Graphs, videos and the interactive demo are on the project page (`docs/index.html`).
 
-**What the experiments showed so far (bAbI task 1):**
+![benchmark](docs/assets/plots/benchmark.png)
 
-- The 2-layer, 64-wide model learns a shortcut, "answer the last place mentioned" (52.7% on test), and stays there.
-  A 4-layer, 128-wide model trained for 8,000 steps finds the real rule ("the last place *this person* went") and
-  reaches **99.3%** test accuracy. Width and training time mattered more than depth alone.
-- **The health checks found a dead parameter.** `score_head` had a bias, but adding the same number to every
-  option's score does not change the softmax, so its gradient was always 0. It was removed.
-- **Pooling.** The first version scored each option from the `[CLS]` vector, like BERT, and could not memorise 16
-  decisions. Averaging the option's own tokens (`pool="candidate"`, the default) memorises them in ~35 steps. Since
-  the dead bias was removed, `[CLS]` pooling memorises them too (~180 steps): `pool="candidate"` is still the
-  default because it learns several times faster.
+| Rhoa (test accuracy) | bAbI | CLINC150 (151 options) | Banking77 (77) | CommonsenseQA (5) |
+|---|---|---|---|---|
+| 4x128, pre-trained | 89.8% | 71.3% | **83.1%** | 17.6% |
+| 4x128, no pre-training | **98.9%** | 66.4% | 79.6% | 15.5% |
+| 2x64, pre-trained | 87.3% | **71.5%** | 81.7% | 17.5% |
+| 2x64, no pre-training | 51.6% | 61.9% | 79.3% | 17.4% |
+| 4x128, GPT-2 blocks, no pre-training | 49.4% | 56.2% | 65.5% | 16.2% |
+| *random guessing* | *28.2%* | *0.7%* | *1.3%* | *20.0%* |
+| *"answer the last place mentioned"* | *52.7%* | | | |
+
+| Mēlon | Result | Teacher | Simple baselines |
+|---|---|---|---|
+| drives CarRacing, 5 unseen tracks (4x128 / 2x64) | **913 / 913** | 913 | always straight -26, random -40 |
+| plays mazes, 200 unseen | 50% solved, on the shortest path when it solves | 100% | greedy 74%, random 8% |
+
+**What we learned**
+
+- **Pre-training helps on real language.** On the two intent datasets (real user requests), pre-training on ~1M words
+  adds 2 to 10 points at both sizes. With it, the 2x64 model matches the 4x128 one.
+- **Pre-training is not always a win.** On bAbI (a strict rule, "the last place *this person* went"), the 4x128 model
+  learns it better from scratch (98.9% vs 89.8%): masked-word habits slowed it down. But the 2x64 model *without*
+  pre-training never finds the rule at all (51.6%, the shortcut level): a small model needs the head start.
+- **Modern blocks learn much faster.** With the same settings, GPT-2 blocks (LayerNorm, learned positions, GELU, biases)
+  stayed at random for ~2,500 steps and finished 10 to 50 points behind the Llama-style blocks (RMSNorm, RoPE, SwiGLU).
+  A side test showed the network itself is fine (it memorises a batch), just ~3x slower, and the shared learning
+  rate (1e-3) suits the Llama blocks better: GPT-2 blocks learn faster at 3e-4. So this comparison favours Llama blocks.
+- **CommonsenseQA fails for every model** (below random): they memorise the training questions (90-99% train accuracy)
+  but tiny models trained on ~1M words have no world knowledge to generalise from. An honest limit.
+- **Mēlon drives as well as its teacher** from pixels only, even at 2x64. The maze is harder: when Mēlon solves a maze it
+  takes the shortest path (it plans), but it solves only half of them.
+- **How the best model is chosen matters.** With four datasets mixed, the validation loss swung between 0.4 and 2.0 from
+  one evaluation to the next. The first full run kept the model of step 3,000 because of that noise. Models are now
+  kept by mean validation accuracy, measured on fixed samples.
+
+Earlier findings (bAbI alone): the 2x64 model first learned the "last place mentioned" shortcut; width and longer
+training found the real rule. The health checks found a dead parameter (`score_head` had a bias, but adding the same
+number to every option's score does not change the softmax, so its gradient was always 0). And scoring options from
+their own tokens (`pool="candidate"`) learns several times faster than from `[CLS]`.
 
 ## Files
 

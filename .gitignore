@@ -15,5 +15,5 @@ data/pretrain/
 # recorded by scripts/car_record.py (~300 MB of frames)
 data/car/
 logs/
-# built by scripts/prepare_web.py (~3 GB: text and token files)
-data/web/
+# built by scripts/prepare_web.py (gigabytes of text and token files): data/web, data/web2, ...
+data/web*/

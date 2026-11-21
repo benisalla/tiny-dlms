@@ -33,7 +33,12 @@ RHOA = {"rhoa": "Rhoa 4x128 · pre-trained", "rhoa_scratch": "Rhoa 4x128 · no p
         "rhoa_bpe": "Rhoa 4x128 BPE · pre-trained", "rhoa_bpe_scratch": "Rhoa 4x128 BPE · no pre-training",
         "rhoa_small_bpe": "Rhoa 2x64 BPE · pre-trained", "rhoa_small_bpe_scratch": "Rhoa 2x64 BPE · no pre-training",
         # pre-trained on ~1.5 GB of web text (scripts/web_pretrain.sh), and its no-pre-training twin (same tokenizer)
-        "rhoa_web": "Rhoa 4x128 · web pre-training", "rhoa_web_scratch": "Rhoa 4x128 · web tokenizer, no pre-training"}
+        "rhoa_web": "Rhoa 4x128 · web pre-training (1.5 GB)", "rhoa_web_scratch": "Rhoa 4x128 · web tokenizer, no pre-training",
+        # round 2: every version pre-trained on 2 GB of web text (scripts/web_pretrain_all.sh), each with its twin
+        "rhoa_web2": "Rhoa 4x128 · web pre-training (2 GB)",
+        "rhoa_small_web2": "Rhoa 2x64 · web pre-training (2 GB)", "rhoa_small_web_scratch": "Rhoa 2x64 · web tokenizer, no pre-training",
+        "rhoa_gpt2_web2": "Rhoa 4x128 GPT-2 blocks · web pre-training (2 GB)",
+        "rhoa_gpt2_web_scratch": "Rhoa 4x128 GPT-2 blocks · web tokenizer, no pre-training"}
 MELON_CAR = {"melon": "Mēlon 4x128", "melon_small": "Mēlon 2x64"}
 
 

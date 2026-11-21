@@ -180,9 +180,14 @@ def main(argv=None):
         m = build_model(tokenizer, args.block_size, pool=pool)
         final, steps = sanity.overfit(m, lambda m: m(*small_batch), steps=500, target=floor + 0.01)  # low target: every decision, not just most
         m.eval()
-        with torch.no_grad():
-            choice = m(*small_batch[:2])[0].argmax(-1)
+        with torch.no_grad():  # loss and accuracy of the final model, measured together
+            logits, end_loss = m(*small_batch)
+        final, choice = end_loss.item(), logits.argmax(-1)
         acc = (small_batch[2][torch.arange(len(small)), choice] > 0).float().mean().item()
+        if acc < 1 and pool == "candidate":  # show the decision(s) still wrong
+            for n in (small_batch[2][torch.arange(len(small)), choice] == 0).nonzero().flatten().tolist():
+                print(f"    still wrong: {small[n].candidates} answer {small[n].answers}, "
+                      f"probs {[round(x, 3) for x in logits[n].softmax(-1).tolist()]}")
         name = f"9{'a' if pool == 'candidate' else 'b'}. memorise 16 decisions (pool={pool})"
         if pool == "candidate":
             check(name, final < floor + 0.05 and acc == 1.0,

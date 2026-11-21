@@ -4,6 +4,8 @@ SmolLM are trained on). Nothing here comes from the fine-tuning datasets: pre-tr
 
     python scripts/prepare_web.py                    # ~1.5 GB of text -> data/web/
     python scripts/prepare_web.py --max_gb 0.01      # a tiny version, to check that everything works
+    python scripts/prepare_web.py --out data/web2 --max_gb 2 --tokenizer data/web/tokenizer.json
+                                                     # 2 GB, same tokenizer as data/web: only the amount of text differs
 
 Steps (each one is skipped when its output already exists):
     1. download   one FineWeb-Edu file (sample/10BT/000_00000.parquet, 2.15 GB) -> data/raw/fineweb-edu/
@@ -113,6 +115,7 @@ def main(argv=None):
     parser.add_argument("--val_share", type=float, default=0.005)
     parser.add_argument("--vocab_size", type=int, default=8192)
     parser.add_argument("--bpe_sample_mb", type=float, default=200, help="text used to learn the BPE merges")
+    parser.add_argument("--tokenizer", default="", help="reuse this tokenizer.json instead of learning a new one")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     args = parser.parse_args(argv)
     os.makedirs(args.out, exist_ok=True)
@@ -121,7 +124,10 @@ def main(argv=None):
     if not os.path.exists(os.path.join(args.out, "val.txt")):
         write_text(args.parquet, args.out, args.max_gb, args.val_share)
     if not os.path.exists(os.path.join(args.out, "tokenizer.json")):
-        train_tokenizer(args.out, args.vocab_size, args.bpe_sample_mb)
+        if args.tokenizer:
+            BPETokenizer.load(args.tokenizer).save(os.path.join(args.out, "tokenizer.json"))
+        else:
+            train_tokenizer(args.out, args.vocab_size, args.bpe_sample_mb)
     stats = {split: tokenize(args.out, split, args.workers) for split in ("val", "train")
              if not os.path.exists(os.path.join(args.out, f"{split}.bin"))}
     if stats:

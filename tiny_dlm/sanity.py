@@ -83,16 +83,20 @@ def check_reproducible(name, build, run, seed=0):
 
 
 def overfit(model, run, steps, lr=3e-3, target=0.05):
-    """Train on ONE fixed batch. A working network drives the loss to ~0. Returns (final loss, steps used)."""
+    """
+    Train on ONE fixed batch. A working network drives the loss to ~0. Returns (final loss, steps used).
+    It stops as soon as the loss is below `target`, BEFORE another update: near a loss of 0, Adam still takes
+    full-size steps, and one more can undo the fit. The returned loss is the one of the model as it is now.
+    """
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.0)
     model.train()
     for step in range(1, steps + 1):
         _, loss = run(model)
+        if loss.item() < target:
+            break
         opt.zero_grad(set_to_none=True)
         loss.backward()
         opt.step()
-        if loss.item() < target:
-            break
     return loss.item(), step
 
 

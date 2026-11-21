@@ -19,7 +19,10 @@
       },
       "models": {
         "rhoa": 0.898,
-        "rhoa_scratch": 0.989
+        "rhoa_scratch": 0.989,
+        "rhoa_small": 0.873,
+        "rhoa_small_scratch": 0.516,
+        "rhoa_gpt2_scratch": 0.494
       }
     },
     "clinc150": {
@@ -30,7 +33,10 @@
       },
       "models": {
         "rhoa": 0.7129090909090909,
-        "rhoa_scratch": 0.6638181818181819
+        "rhoa_scratch": 0.6638181818181819,
+        "rhoa_small": 0.7152727272727273,
+        "rhoa_small_scratch": 0.6187272727272727,
+        "rhoa_gpt2_scratch": 0.5618181818181818
       }
     },
     "banking77": {
@@ -41,7 +47,10 @@
       },
       "models": {
         "rhoa": 0.8308441558441558,
-        "rhoa_scratch": 0.7961038961038961
+        "rhoa_scratch": 0.7961038961038961,
+        "rhoa_small": 0.8172077922077922,
+        "rhoa_small_scratch": 0.7928571428571428,
+        "rhoa_gpt2_scratch": 0.6548701298701298
       }
     },
     "csqa": {
@@ -52,7 +61,10 @@
       },
       "models": {
         "rhoa": 0.17627401837928153,
-        "rhoa_scratch": 0.1545530492898914
+        "rhoa_scratch": 0.1545530492898914,
+        "rhoa_small": 0.17543859649122806,
+        "rhoa_small_scratch": 0.17376775271512113,
+        "rhoa_gpt2_scratch": 0.1620718462823726
       }
     }
   },
@@ -95,6 +107,16 @@
         917.2999999999852,
         908.3999999999897,
         910.599999999983
+      ]
+    },
+    "melon_small": {
+      "mean": 913.4399999999853,
+      "per_track": [
+        915.3999999999827,
+        910.899999999985,
+        918.6999999999853,
+        909.5999999999899,
+        912.5999999999837
       ]
     }
   },
@@ -148,6 +170,24 @@
     "melon": {
       "exact": 0.9070000052452087,
       "within_one_notch": 0.9909999966621399
+    }
+  },
+  "maze": {
+    "teacher": {
+      "solved": 1.0,
+      "steps_over_shortest": 1.0
+    },
+    "greedy": {
+      "solved": 0.74,
+      "steps_over_shortest": 1.4665271966527196
+    },
+    "random": {
+      "solved": 0.085,
+      "steps_over_shortest": 4.357142857142857
+    },
+    "melon_maze": {
+      "solved": 0.505,
+      "steps_over_shortest": 1.0096463022508038
     }
   }
 }

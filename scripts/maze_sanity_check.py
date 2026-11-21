@@ -83,7 +83,7 @@ def main(argv=None):
     model = build()
     small = lambda m: m(images[:32], ids[:32], mask[:32], targets[:32])  # noqa: E731
     floor = -(targets[:32] * targets[:32].clamp(min=1e-12).log()).sum(-1).mean().item()  # > 0: ties between moves
-    loss, steps = sanity.overfit(model, small, steps=500, lr=1e-3, target=floor + 0.02)
+    loss, steps = sanity.overfit(model, small, steps=1000, lr=1e-3, target=floor + 0.02)  # deeper models need more steps
     model.eval()
     with torch.no_grad():
         choice = small(model)[0].argmax(-1)

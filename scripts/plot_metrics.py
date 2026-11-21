@@ -220,6 +220,35 @@ def main(argv=None):
         fig.suptitle("Word tokenizer vs BPE · same models, same training (dotted: random guessing)", color=INK)
         save(fig, args.out, "tokenizers.png", bottom=0.2)
 
+    # 9. what pre-training adds: each pre-trained model next to its twin trained from scratch (same tokenizer)
+    pairs = [("rhoa_scratch", "rhoa", "4x128 · word\n4.6 MB in-domain"),
+             ("rhoa_web_scratch", "rhoa_web", "4x128 · web BPE\n1.5 GB web"),
+             ("rhoa_web_scratch", "rhoa_web2", "4x128 · web BPE\n2 GB web"),
+             ("rhoa_small_web_scratch", "rhoa_small_web2", "2x64 · web BPE\n2 GB web"),
+             ("rhoa_gpt2_web_scratch", "rhoa_gpt2_web2", "GPT-2 blocks · web BPE\n2 GB web")]
+    pairs = [p for p in pairs if all(p[0] in row["models"] and p[1] in row["models"] for row in test.values())]
+    if len(pairs) > 1:
+        fig, axes = plt.subplots(1, len(test), figsize=(13, 3.8), sharey=True, squeeze=False)
+        for ax, (task, row) in zip(axes[0], test.items()):
+            xs = list(range(len(pairs)))
+            none = [row["models"][a] for a, _, _ in pairs]
+            pre = [row["models"][b] for _, b, _ in pairs]
+            ax.bar([x - 0.2 for x in xs], none, 0.38, color=BLUE, label="no pre-training")
+            ax.bar([x + 0.2 for x in xs], pre, 0.38, color=ORANGE, label="pre-trained")
+            for x, (a, b) in enumerate(zip(none, pre)):
+                ax.text(x + 0.2, b + 0.01, f"{(b - a) * 100:+.0f}", ha="center", fontsize=8, color=INK)
+            ax.axhline(row["baselines"]["random"], color=INK, linewidth=1, linestyle=":")
+            ax.set_xticks(xs, [label for _, _, label in pairs], fontsize=6.5)
+            ax.set_title(NAMES.get(task, task))
+            ax.grid(axis="x", visible=False)
+        axes[0][0].yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
+        axes[0][0].set(ylim=(0, 1.1), ylabel="test accuracy (all options)")
+        handles, labels = axes[0][0].get_legend_handles_labels()
+        fig.legend(handles, labels, fontsize=9, ncol=2, loc="lower center", bbox_to_anchor=(0.5, 0.0))
+        fig.suptitle("What pre-training adds · each model next to its twin trained from scratch "
+                     "(numbers: points gained; dotted: random guessing)", color=INK)
+        save(fig, args.out, "pretraining_gain.png", bottom=0.22)
+
     merged["validation"] = results
     with open(path, "w") as f:
         json.dump(merged, f, indent=2)

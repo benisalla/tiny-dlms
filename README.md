@@ -487,6 +487,27 @@ with **all** the options. Graphs, videos and the interactive demo are on the pro
 | drives CarRacing, 5 unseen tracks (4x128 / 2x64) | **913 / 913** | 913 | always straight -26, random -40 |
 | plays mazes, 200 unseen (8x128 / 4x128) | **97.0%** / 50.0% solved, always on the shortest path | 100% | greedy 74% (paths 1.47x longer), random 8.5% |
 
+### Real pre-training: 1.5 GB of web text
+
+Rhoa 4x128 pre-trained on 1.5 GB of FineWeb-Edu (359M tokens, 30,000 steps, ~1.4 passes; `scripts/web_pretrain.sh`),
+then fine-tuned like every other model. Its twin has the same tokenizer and the same fine-tuning, without
+pre-training, so the difference is the pre-training alone.
+
+![pre-training gain](docs/assets/plots/pretraining_gain.png)
+
+| Rhoa 4x128, test accuracy | bAbI | CLINC150 | Banking77 | CommonsenseQA |
+|---|---|---|---|---|
+| web BPE tokenizer, no pre-training | 88.1% | 65.4% | 80.6% | 17.4% |
+| **pre-trained on 1.5 GB of web text** | **99.9%** | **71.6%** | **85.3%** | **18.5%** |
+| gain from web pre-training | **+11.8** | **+6.2** | **+4.7** | +1.1 |
+| *for comparison: gain from the 4.6 MB in-domain pre-training (word)* | *-9.1* | *+4.9* | *+3.5* | *+2.1* |
+
+- **Web pre-training helps on every dataset** and gives the best model of the project (99.9% on bAbI, 85.3% on
+  Banking77). The small in-domain pre-training even hurt bAbI; general text does not.
+- During pre-training the model went from 10% to 46.6% of hidden tokens guessed right, with the validation loss
+  following the training loss all along: every window is new text, so it learns the language instead of memorising.
+- CommonsenseQA stays near random: 2.4M weights cannot store world knowledge, even after reading 1.5 GB.
+
 ### Word tokenizer vs BPE
 
 The same four Rhoa models trained twice, with the same steps and settings; only the tokenizer changes

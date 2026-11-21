@@ -9,6 +9,13 @@
     "rhoa_bpe_scratch": "Rhoa 4x128 BPE \u00b7 no pre-training",
     "rhoa_small_bpe": "Rhoa 2x64 BPE \u00b7 pre-trained",
     "rhoa_small_bpe_scratch": "Rhoa 2x64 BPE \u00b7 no pre-training",
+    "rhoa_web": "Rhoa 4x128 \u00b7 web pre-training (1.5 GB)",
+    "rhoa_web_scratch": "Rhoa 4x128 \u00b7 web tokenizer, no pre-training",
+    "rhoa_web2": "Rhoa 4x128 \u00b7 web pre-training (2 GB)",
+    "rhoa_small_web2": "Rhoa 2x64 \u00b7 web pre-training (2 GB)",
+    "rhoa_small_web_scratch": "Rhoa 2x64 \u00b7 web tokenizer, no pre-training",
+    "rhoa_gpt2_web2": "Rhoa 4x128 GPT-2 blocks \u00b7 web pre-training (2 GB)",
+    "rhoa_gpt2_web_scratch": "Rhoa 4x128 GPT-2 blocks \u00b7 web tokenizer, no pre-training",
     "melon": "M\u0113lon 4x128",
     "melon_small": "M\u0113lon 2x64",
     "melon_maze": "M\u0113lon 8x128",
@@ -31,7 +38,9 @@
         "rhoa_bpe": 0.843,
         "rhoa_bpe_scratch": 0.939,
         "rhoa_small_bpe": 0.747,
-        "rhoa_small_bpe_scratch": 0.508
+        "rhoa_small_bpe_scratch": 0.508,
+        "rhoa_web": 0.999,
+        "rhoa_web_scratch": 0.881
       }
     },
     "clinc150": {
@@ -49,7 +58,9 @@
         "rhoa_bpe": 0.6929090909090909,
         "rhoa_bpe_scratch": 0.6712727272727272,
         "rhoa_small_bpe": 0.6769090909090909,
-        "rhoa_small_bpe_scratch": 0.6605454545454545
+        "rhoa_small_bpe_scratch": 0.6605454545454545,
+        "rhoa_web": 0.716,
+        "rhoa_web_scratch": 0.6538181818181819
       }
     },
     "banking77": {
@@ -67,7 +78,9 @@
         "rhoa_bpe": 0.8165584415584416,
         "rhoa_bpe_scratch": 0.8042207792207792,
         "rhoa_small_bpe": 0.7922077922077922,
-        "rhoa_small_bpe_scratch": 0.7792207792207793
+        "rhoa_small_bpe_scratch": 0.7792207792207793,
+        "rhoa_web": 0.8525974025974026,
+        "rhoa_web_scratch": 0.8064935064935065
       }
     },
     "csqa": {
@@ -85,7 +98,9 @@
         "rhoa_bpe": 0.1796157059314954,
         "rhoa_bpe_scratch": 0.16290726817042606,
         "rhoa_small_bpe": 0.15622389306599832,
-        "rhoa_small_bpe_scratch": 0.15789473684210525
+        "rhoa_small_bpe_scratch": 0.15789473684210525,
+        "rhoa_web": 0.1846282372598162,
+        "rhoa_web_scratch": 0.17376775271512113
       }
     }
   },
@@ -277,6 +292,20 @@
       "vocab": 4096,
       "weights": 459328,
       "tokens_per_word": 1.086249922659682,
+      "unknown": 0.0
+    },
+    "rhoa_web": {
+      "tokenizer": "bpe",
+      "vocab": 8192,
+      "weights": 2360960,
+      "tokens_per_word": 1.2454678573638296,
+      "unknown": 0.0
+    },
+    "rhoa_web_scratch": {
+      "tokenizer": "bpe",
+      "vocab": 8192,
+      "weights": 2360960,
+      "tokens_per_word": 1.2454678573638296,
       "unknown": 0.0
     }
   }

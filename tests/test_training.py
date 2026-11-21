@@ -1,4 +1,7 @@
+import math
 from types import SimpleNamespace
+
+import torch
 
 from conftest import load_script
 from tiny_dlm.training import get_lr
@@ -20,7 +23,8 @@ def test_pretrain_finetune_and_ask(data_dir, tmp_path):
 
     pre = load_script("train").main(common + ["--max_iters", "100", "--lr_decay_iters", "100",
                                               "--n_embd", "32", "--block_size", "32"])
-    assert (out_dir / "pretrain.pt").exists() and pre["best_val_loss"] < 3.0  # well below random guessing
+    vocab = torch.load(out_dir / "pretrain.pt", weights_only=True)["model_args"]["vocab_size"]
+    assert pre["best_val_loss"] < 0.7 * math.log(vocab)  # clearly below random guessing over the vocabulary
 
     result = load_script("finetune").main(common + ["--init_from", str(out_dir / "pretrain.pt"),
                                                     "--max_iters", "150", "--lr_decay_iters", "150"])

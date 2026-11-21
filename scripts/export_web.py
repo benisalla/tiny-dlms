@@ -70,13 +70,18 @@ def main(argv=None):
             b = net(idx, cand_mask).numpy()
         assert np.abs(a - b).max() < 1e-4, f"ONNX and PyTorch disagree on {task}: {np.abs(a - b).max()}"
 
-    meta = {"vocab": tokenizer.itos, "pad_id": tokenizer.pad_id, "unk_id": tokenizer.unk_id,
+    bpe = type(tokenizer).__name__ == "BPETokenizer"
+    tok_meta = ({"tokenizer": "bpe", "merges": [list(m) for m in tokenizer.merges], "first_byte": tokenizer.first_byte}
+                if bpe else {"tokenizer": "word", "vocab": tokenizer.itos})
+    # the web page re-implements the tokenizer: keep a few texts and their ids so it can be checked against Python
+    checks = ["I lost my card yesterday, what should I do?", "where is mary ?", "vaccinations for café 42!"]
+    meta = {**tok_meta, "tokenizer_checks": {t: tokenizer.encode(t) for t in checks}, "pad_id": tokenizer.pad_id, "unk_id": tokenizer.unk_id,
             "cls_id": tokenizer.cls_id, "sep_id": tokenizer.sep_id, "block_size": model.config.block_size,
             "examples": examples}
     with open(os.path.join(args.out_dir, "rhoa.json"), "w") as f:
         json.dump(meta, f)
     print(f"saved {path} ({os.path.getsize(path) / 1e6:.1f} MB, ONNX = PyTorch on every dataset) and rhoa.json "
-          f"(vocabulary of {len(tokenizer)} words, {sum(len(v) for v in examples.values())} examples)")
+          f"({type(tokenizer).__name__}, vocabulary of {len(tokenizer)}, {sum(len(v) for v in examples.values())} examples)")
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ from tiny_dlm.config import ModelConfig, TrainConfig
 from tiny_dlm.data import all_texts, get_multitask_batch, load_csv
 from tiny_dlm.model import TinyDLM
 from tiny_dlm.runtime import parse_config_args, resolve_device, setup_torch
-from tiny_dlm.tokenizer import WordTokenizer
+from tiny_dlm.tokenizer import build_tokenizer
 from tiny_dlm.training import accuracy, build_optimizer, train
 
 
@@ -54,7 +54,7 @@ def main(argv=None):
 
     if cfg.init_from == "scratch":
         texts = [t for splits in tasks.values() for t in all_texts(splits["train"])]
-        tokenizer = WordTokenizer.from_texts(texts)
+        tokenizer = build_tokenizer(cfg.tokenizer, texts, cfg.bpe_vocab_size, min_freq=1)  # learned from the training set
         model_cfg.vocab_size, model_cfg.pad_id, model_cfg.sep_id = len(tokenizer), tokenizer.pad_id, tokenizer.sep_id
         model = TinyDLM(model_cfg).to(device)
         print("initialising a new model from scratch (no pre-training)")
@@ -62,7 +62,7 @@ def main(argv=None):
         # the architecture and the vocabulary come from the pre-trained checkpoint
         model, tokenizer, _ = load_checkpoint(cfg.init_from, device)
         print(f"starting from the pre-trained model {cfg.init_from}")
-    print(f"Rhoa | number of parameters: {model.get_num_params() / 1e3:.1f}K | vocab: {len(tokenizer)} | device: {device}")
+    print(f"Rhoa | number of parameters: {model.get_num_params() / 1e3:.1f}K | {type(tokenizer).__name__} vocab: {len(tokenizer)} | device: {device}")
 
     optimizer = build_optimizer(model, cfg, device)
     rng = random.Random(cfg.seed)

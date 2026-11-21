@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from tiny_dlm import Decision, ModelConfig, TinyDLM, WordTokenizer
+from tiny_dlm import Decision, ModelConfig, TinyDLM, WTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,7 +40,7 @@ def decisions():
 @pytest.fixture
 def tokenizer():
     texts = [t for d in DECISIONS for t in [d.context, *d.candidates]]
-    return WordTokenizer.from_texts(texts)
+    return WTokenizer.from_texts(texts)
 
 
 @pytest.fixture

@@ -6,6 +6,7 @@ Writes docs/assets/results.json (read by the project page and scripts/plot_metri
 
     Rhoa   test accuracy per dataset with ALL the options, for every Rhoa checkpoint found:
              rhoa (4x128, pre-trained), rhoa_scratch, rhoa_small, rhoa_small_scratch, rhoa_gpt2_scratch
+           + per model: tokenizer (word or BPE), vocabulary size, weights, tokens per word on the test text
            baselines: random guessing (mean of 1/k); on bAbI the "last place mentioned" shortcut
     Mēlon  CarRacing score on 5 unseen tracks: melon, melon_small vs teacher, always straight, random
            Maze: share of 200 unseen mazes solved: melon_maze (8x128), melon_maze_4layers vs teacher, greedy, random
@@ -27,7 +28,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # the other scri
 
 RHOA = {"rhoa": "Rhoa 4x128 · pre-trained", "rhoa_scratch": "Rhoa 4x128 · no pre-training",
         "rhoa_small": "Rhoa 2x64 · pre-trained", "rhoa_small_scratch": "Rhoa 2x64 · no pre-training",
-        "rhoa_gpt2_scratch": "Rhoa 4x128 GPT-2 blocks · no pre-training"}
+        "rhoa_gpt2_scratch": "Rhoa 4x128 GPT-2 blocks · no pre-training",
+        # the same models with the BPE tokenizer (scripts/compare_tokenizers.sh); the ones above use the word tokenizer
+        "rhoa_bpe": "Rhoa 4x128 BPE · pre-trained", "rhoa_bpe_scratch": "Rhoa 4x128 BPE · no pre-training",
+        "rhoa_small_bpe": "Rhoa 2x64 BPE · pre-trained", "rhoa_small_bpe_scratch": "Rhoa 2x64 BPE · no pre-training"}
 MELON_CAR = {"melon": "Mēlon 4x128", "melon_small": "Mēlon 2x64"}
 
 
@@ -57,6 +61,17 @@ def main(argv=None):
     # ---------------------------------------------------------------- Rhoa
     results["test"] = {}
     models = {name: load_checkpoint(ckpt(name), device)[:2] for name in RHOA if found(name)}
+    test_texts = [t for task in args.tasks.split(",")
+                  for d in load_csv(os.path.join(args.data_root, task, "test.csv"))[:500] for t in [d.context, *d.candidates[:3]]]
+    words = sum(len(t.split()) for t in test_texts)
+    results["tokenizers"] = {name: {"tokenizer": "bpe" if type(tok).__name__ == "BPETokenizer" else "word",
+                                    "vocab": len(tok), "weights": m.get_num_params(),
+                                    "tokens_per_word": sum(len(tok.encode(t)) for t in test_texts) / words,
+                                    "unknown": sum(tok.encode(t).count(tok.unk_id) for t in test_texts) / words}
+                             for name, (m, tok) in models.items()}
+    for name, row in results["tokenizers"].items():
+        print(f"{name:24s} {row['tokenizer']:4s} vocab {row['vocab']:6,} | {row['weights'] / 1e6:.2f} M weights | "
+              f"{row['tokens_per_word']:.2f} tokens/word | {row['unknown']:.2%} unknown")
     for task in args.tasks.split(","):
         test = load_csv(os.path.join(args.data_root, task, "test.csv"))
         test = test[:args.max_decisions] if args.max_decisions else test

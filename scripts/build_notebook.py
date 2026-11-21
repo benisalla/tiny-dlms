@@ -65,7 +65,7 @@ import time
 import random
 import urllib.parse
 import urllib.request
-from collections import Counter
+from collections import Counter, defaultdict
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, fields
 
@@ -198,8 +198,9 @@ if not os.path.exists(os.path.join(data_dir, "pretrain_val.txt")):
 else:
     print("dataset already in", data_dir)
 """)
-md("#####Tokenizer (word level, built from the data)")
-code(constants("tiny_dlm/tokenizer.py", "PAD", "SPECIALS") + "\n\n\n" + source("tiny_dlm/tokenizer.py", "WordTokenizer"))
+md("#####Tokenizers: BPE (byte pair encoding, learned from our data) and the simple word tokenizer, to compare")
+code(constants("tiny_dlm/tokenizer.py", "PAD", "SPECIALS", "SPLIT") + "\n\n\n" + source("tiny_dlm/tokenizer.py", "WTokenizer")
+     + "\n\n\n" + source("tiny_dlm/tokenizer.py", "BPETokenizer"))
 md("#####Data Loader")
 code(source("tiny_dlm/data.py", "Decision", "load_csv", "all_texts", "collate", "sample_candidates", "get_batch"))
 md("> pre-training batches: BERT masking (80% `[MASK]`, 10% random word, 10% unchanged)")
@@ -212,7 +213,8 @@ pretrain_train = load_text(os.path.join(data_dir, "pretrain_train.txt"))
 pretrain_val = load_text(os.path.join(data_dir, "pretrain_val.txt"))
 
 # one vocabulary for both stages: every word of the decisions and of the pre-training text
-tokenizer = WordTokenizer.from_texts(list(all_texts(train_data)) + pretrain_train)
+tokenizer = BPETokenizer.train(list(all_texts(train_data)) + pretrain_train, vocab_size=4096)  # or WTokenizer.from_texts(...)
+print(tokenizer.tokens(train_data[0].context)[:12])
 print(f"{len(train_data)} / {len(val_data)} / {len(test_data)} decisions | {len(pretrain_train)} stories | vocab {len(tokenizer)}")
 print(train_data[0])
 """)

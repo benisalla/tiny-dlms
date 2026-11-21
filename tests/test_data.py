@@ -1,13 +1,13 @@
 import torch
 
 from conftest import load_script
-from tiny_dlm import Decision, WordTokenizer, collate, load_csv, make_chunks, mask_tokens
+from tiny_dlm import Decision, WTokenizer, collate, load_csv, make_chunks, mask_tokens
 
 
 def test_tokenizer_round_trip_and_unknown_words(tokenizer):
     assert tokenizer.decode(tokenizer.encode("It is raining")) == "it is raining"
     assert tokenizer.encode("it is snowing")[-1] == tokenizer.unk_id
-    assert WordTokenizer.from_dict(tokenizer.to_dict()).itos == tokenizer.itos
+    assert WTokenizer.from_dict(tokenizer.to_dict()).itos == tokenizer.itos
 
 
 def test_pair_layout(tokenizer):
@@ -110,7 +110,7 @@ def test_multitask_batch_comes_from_one_dataset(tokenizer, decisions):
 
 
 def test_tokenizer_min_freq_keeps_option_words():
-    from tiny_dlm import WordTokenizer
-    tok = WordTokenizer.from_texts(["the cat sat", "the dog sat"], min_freq=2, keep=["apple pay"])
+    from tiny_dlm import WTokenizer
+    tok = WTokenizer.from_texts(["the cat sat", "the dog sat"], min_freq=2, keep=["apple pay"])
     assert "the" in tok.stoi and "sat" in tok.stoi and "cat" not in tok.stoi  # seen once -> <unk>
     assert "apple" in tok.stoi and "pay" in tok.stoi  # option words are always kept

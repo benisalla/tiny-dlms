@@ -153,7 +153,8 @@ probs  = softmax(scores)
 time** (plus the others in the candidate layer, through attention, which also works for any number).
 So at test time you can give it 3 options or 10. Two honest limits:
 
-- It can only score options whose **words it knows** (the tokenizer was built from the training text).
+- With the word tokenizer it can only score options whose **words it knows** (the vocabulary was built from the
+  training text). The BPE tokenizer has no such limit: any text is written with known pieces.
 - It was trained with at most 6 options. 7 or 10 work mechanically, and usually well, but very large
   option lists (hundreds) were never seen in training, so accuracy can drop. Each option is also one more
   sequence through the encoder, so the cost grows with K.
@@ -332,8 +333,35 @@ python scripts/finetune.py --tasks babi,clinc150,banking77,csqa  # stage 2: ONE 
   batch comes from one dataset, picked in proportion to its size (no bAbI decision padded to 151 options).
 - **151 options are expensive**, because each option is its own pass through the encoder. Training keeps the right answer plus
   random wrong options (`--max_train_candidates 16`). Accuracy is always measured with **all** the options.
-- **Vocabulary:** words seen at least twice in the pre-training text (`--min_freq 2`), plus every word that appears
-  in an option (`data/pretrain/options.txt`), so a possible answer is never `<unk>`.
+- **Vocabulary:** learned from the pre-training text plus every option text (`data/pretrain/options.txt`), with one of
+  two tokenizers (see below).
+
+## Two tokenizers (`tiny_dlm/tokenizer.py`)
+
+Both are written from scratch and learned from our own data. `--tokenizer` picks one, and the checkpoint remembers which.
+
+| | `WTokenizer` (`--tokenizer word`) | `BPETokenizer` (`--tokenizer bpe`, the default) |
+|---|---|---|
+| One token is | a whole word | a piece of a word (byte pair encoding, as in GPT-2) |
+| Vocabulary | every word seen at least twice (`--min_freq 2`) + option words: 10,892 | `--bpe_vocab_size 4096`: 5 special + 256 bytes + 3,835 merges |
+| Unknown words | become `<unk>` | never: anything can be written with bytes |
+| Rhoa 4x128 weights | 2.71 M | 1.84 M (the embedding table is 2.7x smaller) |
+
+How BPE learns, on our text:
+
+```
+start from bytes:                 ␣ c a r d
+merge #11  (a, r)   -> ar         ␣ c ar d
+merge #26  (␣, c)   -> ␣c         ␣c ar d
+merge #41  (ar, d)  -> ard        ␣c ard
+merge #151 (␣c, ard) -> ␣card     ␣card          one token
+```
+
+Each merge is the most frequent neighbour pair in the text at that moment. Encoding replays the merges in the order
+they were learned, so common words become one token (`" card"`) and rare ones are built from pieces
+(`" homework"` -> `" home"` + `"work"`).
+
+`scripts/compare_tokenizers.sh` trains the same Rhoa models with BPE; the results are in [Results](#results).
 
 ## Decisions from images: Mēlon drives a car (`tiny_dlm/vision.py`, `tiny_dlm/car.py`)
 
@@ -392,6 +420,7 @@ Every model is tested on the same held-out data, next to simple baselines:
 | `rhoa` / `rhoa_scratch` | 4 x 128 | Llama (RMSNorm, RoPE, SwiGLU) | with / without |
 | `rhoa_small` / `rhoa_small_scratch` | 2 x 64 | Llama | with / without |
 | `rhoa_gpt2_scratch` | 4 x 128 | GPT-2 (LayerNorm, learned positions, GELU, biases) | without |
+| `rhoa_bpe` / `rhoa_bpe_scratch`, `rhoa_small_bpe` / `rhoa_small_bpe_scratch` | 4 x 128, 2 x 64 | Llama, **BPE tokenizer** | with / without |
 | `melon` / `melon_small` | 4 x 128 / 2 x 64 | Llama | (car) |
 | `melon_maze` / `melon_maze_4layers` | 8 x 128 / 4 x 128 | Llama | (maze) |
 
@@ -494,7 +523,7 @@ their own tokens (`pool="candidate"`) learns several times faster than from `[CL
 | `tiny_dlm/mlp.py` | classic MLP or SwiGLU |
 | `tiny_dlm/block.py` | `EBlock`: pre-norm encoder block |
 | `tiny_dlm/model.py` | `TinyDLM` (Rhoa): pair encoder, candidate layer, score head, MLM head, `decide()` |
-| `tiny_dlm/tokenizer.py` | word-level tokenizer with `[CLS] [SEP] [MASK]` |
+| `tiny_dlm/tokenizer.py` | two tokenizers: `WTokenizer` (words) and `BPETokenizer` (byte pair encoding) |
 | `tiny_dlm/data.py` | decision CSVs and batches, masked-word batches |
 | `tiny_dlm/training.py` | lr schedule, training loop, loss estimate, accuracy |
 | `tiny_dlm/checkpoint.py` | save / load (with the tokenizer) |
@@ -514,7 +543,8 @@ their own tokens (`pool="candidate"`) learns several times faster than from `[CL
 | `scripts/evaluate_all.py` | final test of every model -> `docs/assets/results.json` |
 | `scripts/plot_metrics.py` | training graphs -> `docs/assets/plots/` |
 | `scripts/rhoa_demo.py` | demo video of Rhoa answering test questions |
-| `scripts/export_web.py` | Rhoa -> ONNX + vocabulary for the web demo (`docs/demo/`) |
+| `scripts/export_web.py` | Rhoa -> ONNX + tokenizer for the web demo (`docs/demo/`) |
+| `scripts/compare_tokenizers.sh` | the same Rhoa models trained with BPE, to compare with the word tokenizer |
 | `scripts/build_notebook.py` | builds the Colab / Kaggle notebook from the package code |
 | `notebooks/Tiny_DLM(Training).ipynb` | the bAbI pipeline in one notebook, to train on a GPU |
 | `docs/index.html` | the project page (GitHub Pages): try Rhoa in the browser, videos, results |

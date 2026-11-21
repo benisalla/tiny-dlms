@@ -16,7 +16,7 @@ import torch
 from tiny_dlm import maze
 from tiny_dlm.config import ModelConfig, TrainConfig
 from tiny_dlm.runtime import parse_config_args, resolve_device, setup_torch
-from tiny_dlm.tokenizer import WordTokenizer
+from tiny_dlm.tokenizer import build_tokenizer
 from tiny_dlm.training import build_optimizer, train
 from tiny_dlm.vision import ImageDLM, encode_options
 
@@ -53,7 +53,7 @@ def main(argv=None):
     setup_torch(cfg.seed)
     device = resolve_device(cfg.device)
 
-    tokenizer = WordTokenizer.from_texts(maze.OPTION_TEXTS)
+    tokenizer = build_tokenizer(cfg.tokenizer, maze.OPTION_TEXTS, cfg.bpe_vocab_size)
     option_idx = encode_options(maze.OPTION_TEXTS, tokenizer, device)  # (k = 4 options, s tokens)
     model_cfg.vocab_size, model_cfg.pad_id, model_cfg.sep_id = len(tokenizer), tokenizer.pad_id, tokenizer.sep_id
     model = ImageDLM(model_cfg, image_size=maze.SIZE * maze.CELL, patch_size=PATCH).to(device)

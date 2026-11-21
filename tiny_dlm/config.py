@@ -84,8 +84,10 @@ class TrainConfig:
     # fine-tuning: keep the right answer(s) + random wrong options, at most this many per decision (0 -> all).
     # CLINC150 has 151 options: 16 per decision trains ~10x faster, and evaluation still uses all of them.
     max_train_candidates: int = 16
-    min_freq: int = 2  # pre-training: words seen fewer times become <unk> (option words are always kept)
-    mask_prob: float = 0.15  # pre-training: fraction of words hidden for the model to guess
+    tokenizer: str = "bpe"  # "bpe" (byte pair encoding, sub-word pieces) or "word" (one id per whole word)
+    bpe_vocab_size: int = 4096  # bpe: tokens in the vocabulary (5 special + 256 bytes + the learned merges)
+    min_freq: int = 2  # word: words seen fewer times become <unk> (option words are always kept)
+    mask_prob: float = 0.15  # pre-training: fraction of tokens hidden for the model to guess
     batch_size: int = 32  # decisions per micro-batch
     grad_accum_steps: int = 1  # micro-batches per optimizer step
 

@@ -5,13 +5,14 @@ Run this before a long training run (on Colab / Kaggle): if one check fails, tra
 
     python scripts/sanity_check.py                       # on data/babi
     python scripts/sanity_check.py --data_dir data/babi --threads 2
+    python scripts/sanity_check.py --tokenizer word         # the same checks with the word tokenizer
 
 The checks (the classic "make sure the network can learn at all" list):
 
     data      1. every answer is one of its candidates, every input fits in block_size
               2. no test / val context also appears in the training set (no leak)
-              3. val / test words are known to the tokenizer (few <unk>)
-              3b. look at the data: one input decoded back to words, exactly as the network gets it
+              3. val / test text is known to the tokenizer (few <unk>; BPE: none, and decode(encode(x)) == x)
+              3b. look at the data: one input cut into tokens, exactly as the network gets it
     model     4. loss at init = loss of random guessing   (decisions: mean log k, words: log vocab)
               5. every parameter gets a finite, non-zero gradient   (nothing is disconnected)
               5b. activations stay healthy from block to block (no explosion, no dead layer)
@@ -38,7 +39,7 @@ from tiny_dlm.data import Decision, all_texts, collate, load_csv, load_text, mak
 from tiny_dlm.model import TinyDLM
 from tiny_dlm import sanity
 from tiny_dlm.sanity import check
-from tiny_dlm.tokenizer import WordTokenizer
+from tiny_dlm.tokenizer import build_tokenizer
 
 
 def build_model(tokenizer, block_size, **overrides):
@@ -52,6 +53,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data_dir", default="data/babi")
     parser.add_argument("--block_size", type=int, default=128)
+    parser.add_argument("--tokenizer", default="bpe", choices=["bpe", "word"])
     parser.add_argument("--threads", type=int, default=2, help="CPU threads used by the checks")
     parser.add_argument("--seed", type=int, default=2000)
     args = parser.parse_args(argv)
@@ -68,7 +70,7 @@ def main(argv=None):
     test = load_csv(test_path) if os.path.exists(test_path) else []
     pre_path = os.path.join(args.data_dir, "pretrain_train.txt")
     texts = load_text(pre_path) if os.path.exists(pre_path) else []
-    tokenizer = WordTokenizer.from_texts(list(all_texts(train)) + texts)
+    tokenizer = build_tokenizer(args.tokenizer, list(all_texts(train)) + texts)
 
     every = train + val + test
     longest = max(len(tokenizer.encode_pair(d.context, c)) for d in every for c in d.candidates)
@@ -84,11 +86,15 @@ def main(argv=None):
     check("2. val/test are not copies of the training set", share < 0.05,
           f"{leaks} shared contexts ({share:.1%}), all tiny stories repeated by bAbI itself" if leaks else "0 shared")
 
-    words = [w for d in val + test for w in tokenizer.split(d.context + " " + " ".join(d.candidates))]
-    unk = sum(w not in tokenizer.stoi for w in words) / max(1, len(words))
-    check("3. val/test words are known to the tokenizer", unk < 0.01, f"{unk:.2%} unknown, vocab {len(tokenizer)}")
+    held_out = [t for d in val + test for t in [d.context, *d.candidates]]
+    ids = [i for t in held_out for i in tokenizer.encode(t)]
+    unk = ids.count(tokenizer.unk_id) / max(1, len(ids))
+    per_word = len(ids) / max(1, sum(len(t.split()) for t in held_out))
+    exact = args.tokenizer == "word" or all(tokenizer.decode(tokenizer.encode(t)) == t.lower() for t in held_out[:2000])
+    check("3. val/test text is known to the tokenizer", unk < 0.01 and exact,
+          f"{unk:.2%} unknown, {per_word:.2f} tokens per word, {args.tokenizer} vocab {len(tokenizer)}")
     shown = collate(train[:1], tokenizer)[0][0, 0].tolist()
-    print(f"  [LOOK] 3b. one input exactly as the network gets it: {' '.join(tokenizer.itos[i] for i in shown)}")
+    print(f"  [LOOK] 3b. one input exactly as the network gets it: {'|'.join(tokenizer.itos[i] for i in shown)}")
 
     # ------------------------------------------------------------------ model
     print("model")
@@ -190,7 +196,7 @@ def main(argv=None):
         model.eval()
         with torch.no_grad():
             same = torch.equal(model(*batch[:2])[0], loaded(*batch[:2])[0])
-    check("11. save -> load gives the same outputs", same and tok2.itos == tokenizer.itos)
+    check("11. save -> load gives the same outputs", same and tok2.to_dict() == tokenizer.to_dict())
 
     return sanity.summary()
 

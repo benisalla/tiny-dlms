@@ -191,6 +191,32 @@ def main(argv=None):
         ax.legend(fontsize=8, ncol=3, loc="upper center", bbox_to_anchor=(0.5, -0.12))
         save(fig, args.out, "benchmark.png")
 
+    # 8. word tokenizer vs BPE: the same model trained twice, only the tokenizer changes (one panel per dataset)
+    pairs = [("rhoa", "rhoa_bpe", "4x128\npre-trained"), ("rhoa_scratch", "rhoa_bpe_scratch", "4x128\nscratch"),
+             ("rhoa_small", "rhoa_small_bpe", "2x64\npre-trained"),
+             ("rhoa_small_scratch", "rhoa_small_bpe_scratch", "2x64\nscratch")]
+    pairs = [p for p in pairs if any(p[1] in row["models"] for row in test.values())]
+    if pairs:
+        fig, axes = plt.subplots(1, len(test), figsize=(12, 3.6), sharey=True, squeeze=False)
+        for ax, (task, row) in zip(axes[0], test.items()):
+            xs = list(range(len(pairs)))
+            word = [row["models"].get(w, 0) for w, _, _ in pairs]
+            bpe = [row["models"].get(b, 0) for _, b, _ in pairs]
+            ax.bar([x - 0.2 for x in xs], word, 0.38, color=BLUE, label="word tokenizer")
+            ax.bar([x + 0.2 for x in xs], bpe, 0.38, color=ORANGE, label="BPE tokenizer")
+            for x, (w, b) in enumerate(zip(word, bpe)):
+                ax.text(x - 0.2, w + 0.01, f"{w:.0%}", ha="center", fontsize=7, color=INK)
+                ax.text(x + 0.2, b + 0.01, f"{b:.0%}", ha="center", fontsize=7, color=INK)
+            ax.axhline(row["baselines"]["random"], color=INK, linewidth=1, linestyle=":")
+            ax.set_xticks(xs, [label for _, _, label in pairs], fontsize=7)
+            ax.set_title(NAMES.get(task, task))
+            ax.grid(axis="x", visible=False)
+        axes[0][0].yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
+        axes[0][0].set(ylim=(0, 1.1), ylabel="test accuracy (all options)")
+        axes[0][0].legend(fontsize=8, loc="upper left")
+        fig.suptitle("Word tokenizer vs BPE · same models, same training (dotted: random guessing)", color=INK)
+        save(fig, args.out, "tokenizers.png")
+
     merged["validation"] = results
     with open(path, "w") as f:
         json.dump(merged, f, indent=2)

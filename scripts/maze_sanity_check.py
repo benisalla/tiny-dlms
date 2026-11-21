@@ -23,7 +23,7 @@ import torch
 from tiny_dlm import maze, sanity
 from tiny_dlm.config import ModelConfig
 from tiny_dlm.sanity import check
-from tiny_dlm.tokenizer import WordTokenizer
+from tiny_dlm.tokenizer import BPETokenizer
 from tiny_dlm.vision import ImageDLM, encode_options
 
 
@@ -60,7 +60,7 @@ def main(argv=None):
 
     print("model")
     k = len(maze.OPTION_TEXTS)
-    tok = WordTokenizer.from_texts(maze.OPTION_TEXTS)
+    tok = BPETokenizer.train(maze.OPTION_TEXTS)
     cfg = ModelConfig(vocab_size=len(tok), block_size=72, n_layer=args.n_layer, n_embd=args.n_embd,
                       n_head=args.n_head, drop_rate=0.0, pad_id=tok.pad_id, sep_id=tok.sep_id)
     build = lambda: ImageDLM(cfg, image_size=48, patch_size=maze.CELL)  # noqa: E731

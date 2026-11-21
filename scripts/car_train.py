@@ -15,7 +15,7 @@ import torch
 
 from tiny_dlm.config import ModelConfig, TrainConfig
 from tiny_dlm.runtime import parse_config_args, resolve_device, setup_torch
-from tiny_dlm.tokenizer import WordTokenizer
+from tiny_dlm.tokenizer import build_tokenizer
 from tiny_dlm.training import build_optimizer, train
 from tiny_dlm.vision import ImageDLM, encode_options
 
@@ -69,7 +69,7 @@ def main(argv=None):
 
     train_images, train_labels, option_texts = load_split(os.path.join(cfg.data_dir, "train.pt"))
     val_images, val_labels, _ = load_split(os.path.join(cfg.data_dir, "val.pt"))
-    tokenizer = WordTokenizer.from_texts(option_texts)  # 12 words: steer, slight, left, accelerate, ...
+    tokenizer = build_tokenizer(cfg.tokenizer, option_texts, cfg.bpe_vocab_size)  # 12 words: steer, slight, left, accelerate, ...
     option_idx = encode_options(option_texts, tokenizer, device)  # (k = 15 options, s tokens)
 
     model_cfg.vocab_size, model_cfg.pad_id, model_cfg.sep_id = len(tokenizer), tokenizer.pad_id, tokenizer.sep_id

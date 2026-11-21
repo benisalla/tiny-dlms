@@ -181,8 +181,8 @@ def encode_options(texts, tokenizer, device="cpu"):
 def load_image_dlm(path, device="cpu"):
     """Return (model, tokenizer, option_texts, checkpoint) from a checkpoint written by scripts/car_train.py."""
     from tiny_dlm.config import ModelConfig
-    from tiny_dlm.tokenizer import WordTokenizer
+    from tiny_dlm.tokenizer import tokenizer_from_dict
     ckpt = torch.load(path, map_location=device, weights_only=True)
     model = ImageDLM(ModelConfig.from_dict(ckpt["model_args"]), **ckpt["image_args"])
     model.load_state_dict(ckpt["model"])
-    return model.to(device).eval(), WordTokenizer.from_dict(ckpt["tokenizer"]), ckpt["option_texts"], ckpt
+    return model.to(device).eval(), tokenizer_from_dict(ckpt["tokenizer"]), ckpt["option_texts"], ckpt

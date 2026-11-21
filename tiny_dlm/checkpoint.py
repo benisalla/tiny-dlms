@@ -4,7 +4,7 @@ import torch
 
 from tiny_dlm.config import ModelConfig
 from tiny_dlm.model import TinyDLM
-from tiny_dlm.tokenizer import WordTokenizer
+from tiny_dlm.tokenizer import tokenizer_from_dict
 
 
 def save_checkpoint(path, model, optimizer=None, model_args=None, iter_num=0, best_val_loss=float('inf'),
@@ -28,5 +28,5 @@ def load_checkpoint(path, device='cpu'):
     model = TinyDLM(ModelConfig.from_dict(checkpoint['model_args']))
     model.load_state_dict(checkpoint['model'])
     model.to(device).eval()
-    tokenizer = WordTokenizer.from_dict(checkpoint['tokenizer'])
+    tokenizer = tokenizer_from_dict(checkpoint['tokenizer'])  # word or BPE
     return model, tokenizer, checkpoint

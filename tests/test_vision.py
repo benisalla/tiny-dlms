@@ -2,13 +2,13 @@ import numpy as np
 import torch
 
 from conftest import tiny_config
-from tiny_dlm import WordTokenizer
+from tiny_dlm import WTokenizer
 from tiny_dlm.car import OPTION_ACTIONS, OPTION_TEXTS, STEERS, nearest_option, preprocess
 from tiny_dlm.vision import ImageDLM, PatchEmbedding, encode_options, load_image_dlm
 
 
 def image_model(seed=0, **overrides):
-    tok = WordTokenizer.from_texts(OPTION_TEXTS)
+    tok = WTokenizer.from_texts(OPTION_TEXTS)
     torch.manual_seed(seed)
     cfg = tiny_config(vocab_size=len(tok), block_size=48, pad_id=tok.pad_id, sep_id=tok.sep_id, **overrides)
     return ImageDLM(cfg).eval(), tok

@@ -18,6 +18,7 @@ PY=${PY:-python}
 export PYTHONUNBUFFERED=1  # logs show progress live
 
 SIZE="--n_layer 4 --n_embd 128 --n_head 4"
+TOK="--tokenizer word"  # the word tokenizer; scripts/compare_tokenizers.sh trains the same Rhoa models with BPE
 TASKS="babi,clinc150,banking77,csqa"
 if [ "${QUICK:-0}" = "1" ]; then
     OUT=/tmp/tiny-dlms-quick; CKPT=$OUT/checkpoints; LOGS=$OUT/logs; SITE=$OUT/docs
@@ -40,16 +41,16 @@ $PY scripts/sanity_check.py
 $PY scripts/car_sanity_check.py $SIZE --picture "$CKPT/car_batch.png"
 
 stage "2. Mēlon (images)"
-done_ melon.pt || $PY scripts/car_train.py $SIZE $(steps $MELON_STEPS) --ckpt_name melon.pt > "$LOGS/melon.log" 2>&1
+done_ melon.pt || $PY scripts/car_train.py $SIZE $TOK $(steps $MELON_STEPS) --ckpt_name melon.pt > "$LOGS/melon.log" 2>&1
 
 stage "3. Rhoa: pre-training, then fine-tuning"
-done_ rhoa_pretrain.pt || $PY scripts/train.py --data_dir data/pretrain $SIZE --drop_rate 0 $(steps $PRETRAIN_STEPS) \
+done_ rhoa_pretrain.pt || $PY scripts/train.py --data_dir data/pretrain $SIZE $TOK --drop_rate 0 $(steps $PRETRAIN_STEPS) \
     --ckpt_name rhoa_pretrain.pt > "$LOGS/rhoa_pretrain.log" 2>&1
 done_ rhoa.pt || $PY scripts/finetune.py --init_from "$CKPT/rhoa_pretrain.pt" --tasks $TASKS $(steps $FINETUNE_STEPS) \
     --ckpt_name rhoa.pt > "$LOGS/rhoa.log" 2>&1
 
 stage "4. Rhoa without pre-training (the comparison)"
-done_ rhoa_scratch.pt || $PY scripts/finetune.py --init_from scratch $SIZE --drop_rate 0 --tasks $TASKS $(steps $FINETUNE_STEPS) \
+done_ rhoa_scratch.pt || $PY scripts/finetune.py --init_from scratch $SIZE $TOK --drop_rate 0 --tasks $TASKS $(steps $FINETUNE_STEPS) \
     --ckpt_name rhoa_scratch.pt > "$LOGS/rhoa_scratch.log" 2>&1
 
 stage "5. final test on held-out data"

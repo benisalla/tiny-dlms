@@ -1,0 +1,153 @@
+{
+  "names": {
+    "rhoa": "Rhoa 4x128 \u00b7 pre-trained",
+    "rhoa_scratch": "Rhoa 4x128 \u00b7 no pre-training",
+    "rhoa_small": "Rhoa 2x64 \u00b7 pre-trained",
+    "rhoa_small_scratch": "Rhoa 2x64 \u00b7 no pre-training",
+    "rhoa_gpt2_scratch": "Rhoa 4x128 GPT-2 blocks \u00b7 no pre-training",
+    "melon": "M\u0113lon 4x128",
+    "melon_small": "M\u0113lon 2x64",
+    "melon_maze": "M\u0113lon 4x128 (maze)"
+  },
+  "test": {
+    "babi": {
+      "options": 6,
+      "decisions": 1000,
+      "baselines": {
+        "random": 0.2815500000000001,
+        "last place mentioned": 0.527
+      },
+      "models": {
+        "rhoa": 0.898,
+        "rhoa_scratch": 0.989
+      }
+    },
+    "clinc150": {
+      "options": 151,
+      "decisions": 5500,
+      "baselines": {
+        "random": 0.006622516556291391
+      },
+      "models": {
+        "rhoa": 0.7129090909090909,
+        "rhoa_scratch": 0.6638181818181819
+      }
+    },
+    "banking77": {
+      "options": 77,
+      "decisions": 3080,
+      "baselines": {
+        "random": 0.012987012987012988
+      },
+      "models": {
+        "rhoa": 0.8308441558441558,
+        "rhoa_scratch": 0.7961038961038961
+      }
+    },
+    "csqa": {
+      "options": 5,
+      "decisions": 1197,
+      "baselines": {
+        "random": 0.19999999999999998
+      },
+      "models": {
+        "rhoa": 0.17627401837928153,
+        "rhoa_scratch": 0.1545530492898914
+      }
+    }
+  },
+  "car": {
+    "teacher": {
+      "mean": 913.3999999999853,
+      "per_track": [
+        914.9999999999825,
+        907.6999999999847,
+        920.4999999999854,
+        913.8999999999907,
+        909.8999999999832
+      ]
+    },
+    "straight": {
+      "mean": -25.76651000998289,
+      "per_track": [
+        46.335494880546776,
+        -59.892307692308016,
+        -50.63636363636372,
+        -60.43333333333364,
+        -4.2060402684558795
+      ]
+    },
+    "random": {
+      "mean": -39.685630935328064,
+      "per_track": [
+        16.040955631398504,
+        -61.538461538461796,
+        -60.00000000000079,
+        -53.333333333333854,
+        -39.59731543624234
+      ]
+    },
+    "melon": {
+      "mean": 912.5399999999851,
+      "per_track": [
+        914.0999999999822,
+        912.2999999999853,
+        917.2999999999852,
+        908.3999999999897,
+        910.599999999983
+      ]
+    }
+  },
+  "validation": {
+    "rhoa": {
+      "babi": {
+        "with_pretraining": {
+          "final": 0.9133333333333333,
+          "best": 0.92
+        },
+        "without_pretraining": {
+          "final": 0.99,
+          "best": 0.9933333333333333
+        }
+      },
+      "clinc150": {
+        "with_pretraining": {
+          "final": 0.77,
+          "best": 0.7966666666666666
+        },
+        "without_pretraining": {
+          "final": 0.77,
+          "best": 0.77
+        }
+      },
+      "banking77": {
+        "with_pretraining": {
+          "final": 0.8233333333333334,
+          "best": 0.8333333333333334
+        },
+        "without_pretraining": {
+          "final": 0.82,
+          "best": 0.82
+        }
+      },
+      "csqa": {
+        "with_pretraining": {
+          "final": 0.20666666666666667,
+          "best": 0.25666666666666665
+        },
+        "without_pretraining": {
+          "final": 0.17,
+          "best": 0.24333333333333335
+        }
+      }
+    },
+    "rhoa_pretrain": {
+      "val_loss": 2.60968017578125,
+      "masked_word_acc": 0.4864864945411682
+    },
+    "melon": {
+      "exact": 0.9070000052452087,
+      "within_one_notch": 0.9909999966621399
+    }
+  }
+}

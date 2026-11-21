@@ -79,13 +79,14 @@ def train(model, optimizer, cfg, get_batch_fns, iter_num=0, best_val_loss=float(
           eval_fn=None):
     """
     The optimisation loop: gradient accumulation, grad clipping, lr schedule,
-    periodic evaluation and checkpointing (best val loss -> `{out_dir}/{ckpt_name}`).
+    periodic evaluation and checkpointing (the best model -> `{out_dir}/{ckpt_name}`).
     `eval_fn(model)` -> {"val_acc/babi": 0.9, ...}: extra numbers measured at every evaluation (accuracy...).
     Everything is also written to `{out_dir}/{ckpt_name}.metrics.jsonl` (see MetricsLog).
     Returns the best validation loss.
     """
     ckpt_path = os.path.join(cfg.out_dir, cfg.ckpt_name)
     log = MetricsLog(ckpt_path + ".metrics.jsonl")
+    best_score = -1.0  # best mean validation accuracy so far (when eval_fn measures accuracy)
     trainable = [p for p in model.parameters() if p.requires_grad]
     model.train()
 
@@ -103,11 +104,21 @@ def train(model, optimizer, cfg, get_batch_fns, iter_num=0, best_val_loss=float(
             print(f"Val-Step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
                   + "".join(f", {k} {v:.3f}" for k, v in extra.items()))
             log.write(kind="eval", step=iter_num, train_loss=losses['train'], val_loss=losses['val'], **extra)
-            if losses['val'] < best_val_loss or cfg.always_save_checkpoint:
-                best_val_loss = min(best_val_loss, losses['val'])
-                if iter_num > 0:
-                    save_checkpoint(ckpt_path, model, optimizer, model.config.to_dict(),
-                                    iter_num, best_val_loss, extra=ckpt_extra)
+
+            # which model to keep: the best mean validation accuracy when it is measured (fixed samples, steady),
+            # else the lowest validation loss. With several datasets the loss is too noisy to pick a model:
+            # each evaluation samples different batches, and a few over-confident mistakes can double it.
+            accs = [v for k, v in extra.items() if k.startswith("val_acc/")]
+            if accs:
+                improved = sum(accs) / len(accs) > best_score
+                best_score = max(best_score, sum(accs) / len(accs))
+            else:
+                improved = losses['val'] < best_val_loss
+            best_val_loss = min(best_val_loss, losses['val'])
+            if (improved or cfg.always_save_checkpoint) and iter_num > 0:
+                save_checkpoint(ckpt_path, model, optimizer, model.config.to_dict(),
+                                iter_num, best_val_loss, extra=ckpt_extra)
+                print(f"  kept the model of step {iter_num}" + (f" (mean val accuracy {best_score:.3f})" if accs else ""))
 
         if iter_num >= cfg.max_iters:
             break

@@ -24,11 +24,12 @@ if [ "${QUICK:-0}" = "1" ]; then
     MELON_STEPS=20; PRETRAIN_STEPS=20; FINETUNE_STEPS=20; EVAL_EVERY=10; TEST_LIMIT="--max_decisions 50"; TRACKS=1
 else
     CKPT=checkpoints; LOGS=logs; SITE=docs
-    MELON_STEPS=4000; PRETRAIN_STEPS=6000; FINETUNE_STEPS=10000; EVAL_EVERY=500; TEST_LIMIT=""; TRACKS=5
+    MELON_STEPS=4000; PRETRAIN_STEPS=6000; FINETUNE_STEPS=16000; EVAL_EVERY=500; TEST_LIMIT=""; TRACKS=5
 fi
 mkdir -p "$CKPT" "$LOGS" "$SITE/assets"
 steps() { echo "--max_iters $1 --lr_decay_iters $1 --eval_interval $EVAL_EVERY --out_dir $CKPT"; }
 stage() { echo; echo "== $(date +%H:%M) $*"; }
+done_() { [ -f "$CKPT/$1" ] && echo "   $1 already trained: kept (delete it to train again)"; }
 
 stage "data"
 [ -f data/clinc150/train.csv ] || $PY scripts/prepare_data.py
@@ -39,16 +40,16 @@ $PY scripts/sanity_check.py
 $PY scripts/car_sanity_check.py $SIZE --picture "$CKPT/car_batch.png"
 
 stage "2. Mēlon (images)"
-$PY scripts/car_train.py $SIZE $(steps $MELON_STEPS) --ckpt_name melon.pt > "$LOGS/melon.log" 2>&1
+done_ melon.pt || $PY scripts/car_train.py $SIZE $(steps $MELON_STEPS) --ckpt_name melon.pt > "$LOGS/melon.log" 2>&1
 
 stage "3. Rhoa: pre-training, then fine-tuning"
-$PY scripts/train.py --data_dir data/pretrain $SIZE --drop_rate 0 $(steps $PRETRAIN_STEPS) \
+done_ rhoa_pretrain.pt || $PY scripts/train.py --data_dir data/pretrain $SIZE --drop_rate 0 $(steps $PRETRAIN_STEPS) \
     --ckpt_name rhoa_pretrain.pt > "$LOGS/rhoa_pretrain.log" 2>&1
-$PY scripts/finetune.py --init_from "$CKPT/rhoa_pretrain.pt" --tasks $TASKS $(steps $FINETUNE_STEPS) \
+done_ rhoa.pt || $PY scripts/finetune.py --init_from "$CKPT/rhoa_pretrain.pt" --tasks $TASKS $(steps $FINETUNE_STEPS) \
     --ckpt_name rhoa.pt > "$LOGS/rhoa.log" 2>&1
 
 stage "4. Rhoa without pre-training (the comparison)"
-$PY scripts/finetune.py --init_from scratch $SIZE --drop_rate 0 --tasks $TASKS $(steps $FINETUNE_STEPS) \
+done_ rhoa_scratch.pt || $PY scripts/finetune.py --init_from scratch $SIZE --drop_rate 0 --tasks $TASKS $(steps $FINETUNE_STEPS) \
     --ckpt_name rhoa_scratch.pt > "$LOGS/rhoa_scratch.log" 2>&1
 
 stage "5. final test on held-out data"

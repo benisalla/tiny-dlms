@@ -108,7 +108,7 @@ flowchart TB
 
 The steps, with the code that does each one (`tiny_dlm/model.py`, `forward`):
 
-| Step | What happens | Shape (b decisions, k options, s tokens, e = 64 embedding size) |
+| Step | What happens | Shape |
 |---|---|---|
 | 0 | build one `[CLS] context [SEP] option` sequence per option | `idx (b, k, s)` |
 | 1 | stack all options of all decisions into one big batch | `(b*k, s)` |
@@ -296,21 +296,22 @@ Facebook AI Research: 20 tasks of short stories with questions. It is turned int
   tasks 2-20 from the [Muennighoff/babi](https://huggingface.co/datasets/Muennighoff/babi) mirror):
   every sentence and question but no answers. No test story is ever used.
 
-What one example looks like in each stage (more in [2. Data](docs/02-data.md)):
+What one example looks like in each stage (real examples of every dataset in [2. Data](docs/02-data.md)):
 
 ```
-STAGE 1 · pre-training · data/babi/pretrain_train.txt (one story per line, no answers)
-  file   : mary moved to the bathroom . john went to the hallway . where is mary ?
-  input  : [CLS] mary moved to the bathroom [MASK] west went to the hallway . where is mary ?
-  target :                                   .     john                           (guess the hidden words)
-  tensors: idx (b, s) · targets (b, s), -1 where nothing is hidden
+STAGE 1 · pre-training · data/pretrain/ (our tasks' text) or data/web/ (1.5 GB of web pages), no answers
+  text   : mary moved to the bathroom . john went to the hallway . where is mary ?
+  input  : <cls> <mask> moved to the bathroom . john went to the hallway . where <mask> mary ?
+  target :        mary                                                          is      (guess the hidden tokens)
 
-STAGE 2 · fine-tuning · data/babi/train.csv (context, candidates, answers)
-  file   : "mary moved to the bathroom . john went to the hallway . where is mary ?", "bathroom | hallway", "bathroom"
-  input  : [CLS] mary moved to the bathroom . john went to the hallway . where is mary ? [SEP] bathroom
-           [CLS] mary moved to the bathroom . john went to the hallway . where is mary ? [SEP] hallway
-  target : bathroom 1.0 · hallway 0.0                                               (pick the right candidate)
-  tensors: idx (b, k, s) · cand_mask (b, k) · targets (b, k)
+STAGE 2 · fine-tuning · data/<dataset>/train.csv (context, candidates, answers)
+  row    : "where would you stand in a line and not need a coat if it is cold outside ?",
+           "good book | bus stop | post office | triangle | graph", "post office"
+  input  : <cls> where would you stand … cold outside ? <sep> good book
+           <cls> where would you stand … cold outside ? <sep> bus stop
+           <cls> where would you stand … cold outside ? <sep> post office      ← right
+           …  (one sequence per option)
+  target : one score per option; the softmax should put "post office" first
 ```
 
 ## More data: many options, one model (`scripts/prepare_data.py`)

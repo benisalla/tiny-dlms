@@ -6,6 +6,7 @@ Run this before a long training run (on Colab / Kaggle): if one check fails, tra
     python scripts/sanity_check.py                       # on data/babi
     python scripts/sanity_check.py --data_dir data/babi --threads 2
     python scripts/sanity_check.py --tokenizer word         # the same checks with the word tokenizer
+    python scripts/sanity_check.py --web_dir data/web       # masked-word checks on the web corpus and its tokenizer
 
 The checks (the classic "make sure the network can learn at all" list):
 
@@ -31,6 +32,7 @@ import os
 import random
 import tempfile
 
+import numpy as np
 import torch
 
 from tiny_dlm.checkpoint import load_checkpoint, save_checkpoint
@@ -39,7 +41,7 @@ from tiny_dlm.data import Decision, all_texts, collate, load_csv, load_text, mak
 from tiny_dlm.model import TinyDLM
 from tiny_dlm import sanity
 from tiny_dlm.sanity import check
-from tiny_dlm.tokenizer import build_tokenizer
+from tiny_dlm.tokenizer import BPETokenizer, build_tokenizer
 
 
 def build_model(tokenizer, block_size, **overrides):
@@ -54,6 +56,7 @@ def main(argv=None):
     parser.add_argument("--data_dir", default="data/babi")
     parser.add_argument("--block_size", type=int, default=128)
     parser.add_argument("--tokenizer", default="bpe", choices=["bpe", "word"])
+    parser.add_argument("--web_dir", default="", help="a corpus from scripts/prepare_web.py (train.bin, tokenizer.json)")
     parser.add_argument("--threads", type=int, default=2, help="CPU threads used by the checks")
     parser.add_argument("--seed", type=int, default=2000)
     args = parser.parse_args(argv)
@@ -71,6 +74,13 @@ def main(argv=None):
     pre_path = os.path.join(args.data_dir, "pretrain_train.txt")
     texts = load_text(pre_path) if os.path.exists(pre_path) else []
     tokenizer = build_tokenizer(args.tokenizer, list(all_texts(train)) + texts)
+    web_chunks = []
+    if args.web_dir:  # pre-training on the web corpus: its own tokenizer, windows of train.bin
+        tokenizer = BPETokenizer.load(os.path.join(args.web_dir, "tokenizer.json"))
+        tokens = np.memmap(os.path.join(args.web_dir, "train.bin"), dtype=np.uint16, mode="r")
+        n = args.block_size - 1
+        web_chunks = [[tokenizer.cls_id] + tokens[i:i + n].tolist() for i in (rng.randrange(len(tokens) - n) for _ in range(64))]
+        texts = [tokenizer.decode(c[1:]) for c in web_chunks]
 
     every = train + val + test
     longest = max(len(tokenizer.encode_pair(d.context, c)) for d in every for c in d.candidates)
@@ -107,7 +117,7 @@ def main(argv=None):
     check("4a. decision loss at init = random guessing", abs(loss.item() - uniform) < 0.1,
           f"loss {loss.item():.3f}, mean log k {uniform:.3f}")
     if texts:
-        chunks = make_chunks(texts[:64], tokenizer, args.block_size)
+        chunks = web_chunks or make_chunks(texts[:64], tokenizer, args.block_size)
         mlm = mask_tokens(chunks[:32], tokenizer, rng=rng)
         with torch.no_grad():
             _, mlm_loss = model(mlm[0], None, mlm[1])
@@ -168,7 +178,7 @@ def main(argv=None):
     for pool in ("candidate", "cls"):
         torch.manual_seed(args.seed)
         m = build_model(tokenizer, args.block_size, pool=pool)
-        final, steps = sanity.overfit(m, lambda m: m(*small_batch), steps=300, target=floor + 0.05)
+        final, steps = sanity.overfit(m, lambda m: m(*small_batch), steps=500, target=floor + 0.01)  # low target: every decision, not just most
         m.eval()
         with torch.no_grad():
             choice = m(*small_batch[:2])[0].argmax(-1)

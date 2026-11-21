@@ -86,6 +86,7 @@ class TrainConfig:
     max_train_candidates: int = 16
     tokenizer: str = "bpe"  # "bpe" (byte pair encoding, sub-word pieces) or "word" (one id per whole word)
     bpe_vocab_size: int = 4096  # bpe: tokens in the vocabulary (5 special + 256 bytes + the learned merges)
+    tokenizer_path: str = ""  # fine-tuning from scratch: use this saved tokenizer (e.g. data/web/tokenizer.json)
     min_freq: int = 2  # word: words seen fewer times become <unk> (option words are always kept)
     mask_prob: float = 0.15  # pre-training: fraction of tokens hidden for the model to guess
     batch_size: int = 32  # decisions per micro-batch

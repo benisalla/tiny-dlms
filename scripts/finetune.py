@@ -6,6 +6,7 @@ a softmax over the candidates' scores, compared with the correct answer(s).
 
     python scripts/finetune.py                                         # bAbI, from checkpoints/pretrain.pt
     python scripts/finetune.py --init_from scratch                     # no pre-training, to compare
+    python scripts/finetune.py --init_from scratch --tokenizer_path data/web/tokenizer.json   # same tokenizer as rhoa_web
     python scripts/finetune.py --init_from checkpoints/pretrain.pt --learning_rate 3e-4
 
 One model, every dataset (scripts/prepare_data.py builds them, data/pretrain is the matching pre-training):
@@ -24,7 +25,7 @@ from tiny_dlm.config import ModelConfig, TrainConfig
 from tiny_dlm.data import all_texts, get_multitask_batch, load_csv
 from tiny_dlm.model import TinyDLM
 from tiny_dlm.runtime import parse_config_args, resolve_device, setup_torch
-from tiny_dlm.tokenizer import build_tokenizer
+from tiny_dlm.tokenizer import BPETokenizer, build_tokenizer
 from tiny_dlm.training import accuracy, build_optimizer, train
 
 
@@ -54,7 +55,10 @@ def main(argv=None):
 
     if cfg.init_from == "scratch":
         texts = [t for splits in tasks.values() for t in all_texts(splits["train"])]
-        tokenizer = build_tokenizer(cfg.tokenizer, texts, cfg.bpe_vocab_size, min_freq=1)  # learned from the training set
+        if cfg.tokenizer_path:  # the same tokenizer as a pre-trained model: only the pre-training differs
+            tokenizer = BPETokenizer.load(cfg.tokenizer_path)
+        else:  # learned from the training set
+            tokenizer = build_tokenizer(cfg.tokenizer, texts, cfg.bpe_vocab_size, min_freq=1)
         model_cfg.vocab_size, model_cfg.pad_id, model_cfg.sep_id = len(tokenizer), tokenizer.pad_id, tokenizer.sep_id
         model = TinyDLM(model_cfg).to(device)
         print("initialising a new model from scratch (no pre-training)")

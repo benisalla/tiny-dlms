@@ -6,8 +6,8 @@ The encoder is the "reading" part. It is a stack of Transformer blocks, like GPT
 **every word can look at every other word, before and after it** (bidirectional), like BERT.
 
 ```
-INPUT   idx   (b, s)          token ids        b = number of sequences, s = tokens per sequence
-OUTPUT  H     (b, s, e)       one vector of size e per token, which now "knows" about the whole sequence
+INPUT   idx   (b, s)          token ids
+OUTPUT  H     (b, s, e)       one vector per token, which now "knows" about the whole sequence
 ```
 
 ## Inside
@@ -70,9 +70,9 @@ GPT / tiny-llm (causal)                         TinyDLM (bidirectional + padding
 The attention itself (`tiny_dlm/attention.py`):
 
 ```
-X (b, s, e) ──c_attn──▶ Q, K, V ──split into nh heads of size h──▶ (b, nh, s, h)     e = nh × h
+X (b, s, e) ──c_attn──▶ Q, K, V ──split into heads──▶ (b, nh, s, h)
                               │
-                     RoPE rotates Q and K by theta[m, i] = m / base^(2i/h)   (m position, i pair)
+                     RoPE rotates Q and K by theta[m, i] = m / base^(2i/h)
                               │
           softmax(Q · Kᵀ / √h  + mask) · V        ◀── F.scaled_dot_product_attention
                               │

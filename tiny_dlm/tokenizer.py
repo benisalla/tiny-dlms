@@ -18,6 +18,7 @@ How it works, in three steps:
 
 So common words become one token (" card"), rare words are built from pieces.
 """
+import heapq
 import json
 import re
 from collections import Counter, defaultdict
@@ -85,13 +86,17 @@ class BPETokenizer:
         merges: the learned merges in order, [(a, b), ...]: merge number r makes token id len(SPECIALS) + 256 + r.
 
         Text is lowercased first (our datasets are lowercase).
+        prefix_space: every text starts with a space (as in GPT-2 / RoBERTa), so a word is always the same token,
+        at the start of a text or in the middle: "post office" -> [" post", " office"], never ["p", "ost", ...].
+
         One model input is a (context, candidate) pair:
             encode_pair("it is raining", "take an umbrella")
             -> <cls> it is raining <sep> take an umbrella
     """
 
-    def __init__(self, merges):
+    def __init__(self, merges, prefix_space=True):
         self.merges = [tuple(m) for m in merges]
+        self.prefix_space = prefix_space
         self.first_byte = len(SPECIALS)  # token id of byte 0
         self.rank = {pair: r for r, pair in enumerate(self.merges)}  # pair -> merge order (lower = learned earlier)
         pieces = [s.encode() for s in SPECIALS] + [bytes([x]) for x in range(256)]  # the bytes of every token
@@ -104,10 +109,10 @@ class BPETokenizer:
 
     # ------------------------------------------------------------------ training
     @classmethod
-    def train(cls, texts, vocab_size=4096, verbose=False):
+    def train(cls, texts, vocab_size=4096, prefix_space=True, verbose=False):
         """Learn merges until the vocabulary holds `vocab_size` tokens (or no pair appears twice)."""
         first = len(SPECIALS)
-        chunk_counts = Counter(c for text in texts for c in cls.split(text))
+        chunk_counts = Counter(c for text in texts for c in cls.split(" " + text if prefix_space else text))
         chunks = [[first + x for x in c.encode("utf-8")] for c in chunk_counts]  # each distinct chunk, as bytes
         freq = list(chunk_counts.values())  # how often each chunk appears
 
@@ -118,26 +123,38 @@ class BPETokenizer:
                 pairs[pair] += freq[n]
                 where[pair].add(n)
 
+        # a heap finds the most frequent pair fast. Counts change after each merge, so an entry can be stale:
+        # it is only trusted when its count is still the current one (otherwise it is skipped)
+        heap = [(-n, pair) for pair, n in pairs.items()]
+        heapq.heapify(heap)
         merges = []
-        while first + 256 + len(merges) < vocab_size and pairs:
-            best = max(pairs, key=lambda p: (pairs[p], -p[0], -p[1]))  # the most frequent pair; ties -> smallest ids
-            if pairs[best] < 2:
+        while first + 256 + len(merges) < vocab_size and heap:
+            n, best = heapq.heappop(heap)  # the most frequent pair; ties -> smallest ids
+            if pairs.get(best, 0) != -n:
+                continue  # stale entry
+            if -n < 2:
                 break
             new = first + 256 + len(merges)
             merges.append(best)
-            for n in where.pop(best):
-                ids = chunks[n]
+            changed = set()
+            for c in where.pop(best):
+                ids = chunks[c]
                 for pair in zip(ids, ids[1:]):  # forget this chunk's old pairs...
-                    pairs[pair] -= freq[n]
-                    if pairs[pair] <= 0:
-                        del pairs[pair]
-                chunks[n] = ids = cls.merge(ids, best, new)
+                    pairs[pair] -= freq[c]
+                    changed.add(pair)
+                chunks[c] = ids = cls.merge(ids, best, new)
                 for pair in zip(ids, ids[1:]):  # ...and count its new ones
-                    pairs[pair] += freq[n]
-                    where[pair].add(n)
+                    pairs[pair] += freq[c]
+                    where[pair].add(c)
+                    changed.add(pair)
+            for pair in changed:
+                if pairs[pair] > 0:
+                    heapq.heappush(heap, (-pairs[pair], pair))
+                else:
+                    del pairs[pair]
             if verbose and len(merges) % 500 == 0:
                 print(f"  {len(merges)} merges, vocab {first + 256 + len(merges)}")
-        return cls(merges)
+        return cls(merges, prefix_space)
 
     @staticmethod
     def merge(ids, pair, new):
@@ -170,13 +187,16 @@ class BPETokenizer:
         return self.cache[chunk]
 
     def encode(self, text):
+        if self.prefix_space and not text.startswith(" "):
+            text = " " + text
         return [i for chunk in self.split(text) for i in self.encode_chunk(chunk)]
 
     def encode_pair(self, context, candidate):
         return [self.cls_id] + self.encode(context) + [self.sep_id] + self.encode(candidate)
 
     def decode(self, ids):
-        return b"".join(self.pieces[i] for i in ids if i != self.pad_id).decode("utf-8", errors="replace")
+        text = b"".join(self.pieces[i] for i in ids if i != self.pad_id).decode("utf-8", errors="replace")
+        return text[1:] if self.prefix_space and text.startswith(" ") else text
 
     def tokens(self, text):
         """The pieces a text is cut into, to look at them."""
@@ -187,12 +207,12 @@ class BPETokenizer:
 
     # ------------------------------------------------------------------ saving
     def to_dict(self):
-        return {"type": "bpe", "merges": [list(m) for m in self.merges]}
+        return {"type": "bpe", "prefix_space": self.prefix_space, "merges": [list(m) for m in self.merges]}
 
     @classmethod
     def from_dict(cls, d):
         assert d.get("type") == "bpe", "this checkpoint was made with the old word tokenizer: train it again"
-        return cls(d["merges"])
+        return cls(d["merges"], d.get("prefix_space", False))  # the first BPE models had no prefix space
 
     def save(self, path):
         with open(path, "w") as f:

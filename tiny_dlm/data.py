@@ -165,6 +165,19 @@ def mask_tokens(chunks, tokenizer, mask_prob=0.15, rng=random):
     return idx, targets
 
 
+def get_stream_batch(tokens, batch_size, block_size, tokenizer, device, mask_prob=0.15, rng=random):
+    """
+    A random batch for pre-training on a big token file (data/web/train.bin, see scripts/prepare_web.py).
+    `tokens` is a numpy memmap: each row is a random window of block_size - 1 tokens, after [CLS].
+    The words to hide are picked again every time (dynamic masking): the same text never gets the same blanks twice.
+    """
+    n = block_size - 1
+    starts = [rng.randrange(len(tokens) - n) for _ in range(batch_size)]
+    chunks = [[tokenizer.cls_id] + tokens[i:i + n].tolist() for i in starts]
+    idx, targets = mask_tokens(chunks, tokenizer, mask_prob, rng)
+    return idx.to(device), None, targets.to(device)
+
+
 def get_mlm_batch(chunks, batch_size, tokenizer, device, mask_prob=0.15, rng=random):
     """
     A random batch for pre-training: (idx, None, targets).

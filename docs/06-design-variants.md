@@ -57,7 +57,7 @@ flowchart LR
 ```
 
 - **Learned**: position 7 always gets the same added vector. The model must learn what "position 7" means.
-- **RoPE**: Q and K are rotated by the angle `theta[m, i] = m / base^(2i/h)` (m = position, i = pair, h = size per head); the score `Q · K` then depends only on the **distance** between two words.
+- **RoPE**: Q and K are rotated by the angle `theta[m, i] = m / base^(2i/h)`; the score `Q · K` then depends only on the **distance** between two words.
   "The word 3 positions before me" means the same thing anywhere in the story. No extra weights.
 
 ## MLP: classic vs SwiGLU

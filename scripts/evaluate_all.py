@@ -31,7 +31,9 @@ RHOA = {"rhoa": "Rhoa 4x128 · pre-trained", "rhoa_scratch": "Rhoa 4x128 · no p
         "rhoa_gpt2_scratch": "Rhoa 4x128 GPT-2 blocks · no pre-training",
         # the same models with the BPE tokenizer (scripts/compare_tokenizers.sh); the ones above use the word tokenizer
         "rhoa_bpe": "Rhoa 4x128 BPE · pre-trained", "rhoa_bpe_scratch": "Rhoa 4x128 BPE · no pre-training",
-        "rhoa_small_bpe": "Rhoa 2x64 BPE · pre-trained", "rhoa_small_bpe_scratch": "Rhoa 2x64 BPE · no pre-training"}
+        "rhoa_small_bpe": "Rhoa 2x64 BPE · pre-trained", "rhoa_small_bpe_scratch": "Rhoa 2x64 BPE · no pre-training",
+        # pre-trained on ~1.5 GB of web text (scripts/web_pretrain.sh), and its no-pre-training twin (same tokenizer)
+        "rhoa_web": "Rhoa 4x128 · web pre-training", "rhoa_web_scratch": "Rhoa 4x128 · web tokenizer, no pre-training"}
 MELON_CAR = {"melon": "Mēlon 4x128", "melon_small": "Mēlon 2x64"}
 
 

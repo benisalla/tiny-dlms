@@ -66,8 +66,7 @@ flowchart TB
 
 ## Tensor shapes, step by step
 
-With the default config (`n_embd = 64`) and a batch of **B** decisions, **K** candidates (the largest in the
-batch), **T** tokens (the longest sequence in the batch):
+With the default config and a batch of 32 decisions, 6 options and 71 tokens:
 
 ```
 idx         (b, k, s)        token ids                         e.g. (32, 6, 71)

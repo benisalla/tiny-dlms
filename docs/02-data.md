@@ -1,140 +1,184 @@
-# 2. Data: what the model eats in each stage
+# 2. Data: what the model reads in each stage
 
 [← 1. Overview](01-overview.md) · next: [3. Encoder →](03-encoder.md)
 
-Both stages use [bAbI](https://arxiv.org/abs/1502.05698), a very simple question-answering benchmark made of short
-stories. `scripts/prepare_babi.py` downloads it and writes everything into `data/babi/`:
+Rhoa learns in two stages, from two different kinds of data:
 
-| File | Stage | Content | Size |
+| Stage | What it learns | Data | Has answers? |
 |---|---|---|---|
-| `pretrain_train.txt` | 1. pre-training | one story per line, **no answers** | 6,897 stories, ~594k words |
-| `pretrain_val.txt` | 1. pre-training | the same, held out (every 20th story) | 363 stories |
-| `train.csv` | 2. fine-tuning | one decision per row | 9,000 |
-| `val.csv` | 2. fine-tuning | one decision per row | 1,000 |
-| `test.csv` | 2. fine-tuning | one decision per row, used only at the very end | 1,000 |
+| 1. pre-training | the language: which words go together | plain text, one of two corpora (below) | no |
+| 2. fine-tuning | to choose: the right option for a question | 4 decision datasets, as CSV | yes |
 
 ```mermaid
 flowchart LR
-    B["bAbI<br/>(Hugging Face)"] --> P["prepare_babi.py"]
-    P --> T1["pretrain_*.txt<br/>plain stories, all 20 tasks"]
-    P --> T2["train / val / test.csv<br/>decisions, task 1"]
-    T1 --> S1["Stage 1<br/>pre-training"]
-    T2 --> S2["Stage 2<br/>fine-tuning"]
+    W["FineWeb-Edu<br/>(web pages)"] --> PW["prepare_web.py"] --> DW["data/web/<br/>~1.5 GB of text"]
+    S["bAbI · CLINC150 · Banking77 · CSQA<br/>(original sources)"] --> PD["prepare_data.py"]
+    PD --> DP["data/pretrain/<br/>4.6 MB of text"]
+    PD --> DF["data/&lt;dataset&gt;/<br/>train / val / test.csv"]
+    DW --> S1["Stage 1<br/>pre-training"]
+    DP --> S1
+    DF --> S2["Stage 2<br/>fine-tuning"]
+    S1 --> S2
 ```
 
 ---
 
-## Stage 1: pre-training data (plain text)
+## Stage 1: pre-training data
 
-### On disk: one story per line
+There are two pre-training corpora, kept side by side so we can compare what each one gives the model.
+`scripts/train.py --data_dir data/pretrain` or `--data_dir data/web` picks one.
+
+### Corpus A: `data/pretrain/`, small and close to the tasks (4.6 MB)
+
+Built by `scripts/prepare_data.py`. One text per line, **never an answer**, and never a validation or test question.
+
+| Part | Lines | Example line |
+|---|---|---|
+| bAbI stories (all 20 bAbI tasks) | 6,897 | `mary moved to the bathroom . john went to the hallway . daniel went back to the hallway . …` |
+| CLINC150 training questions | 15,100 | `i want to find out how do i schedule a meeting` |
+| Banking77 training questions | 9,003 | `why has my transfer not arrived yet ?` |
+| CommonsenseQA training questions | 8,658 | `where would you stand in a line and not need a coat if it is cold outside ?` |
+| **Total** | **39,658** | about 960,000 words (`pretrain_train.txt`), plus `pretrain_val.txt` (5,424 lines) |
+
+`options.txt` lists every option text (13,141). The tokenizer learns from them too, so every possible answer is
+written well.
+
+What this corpus teaches: the words and sentence shapes of our four tasks. What it cannot teach: anything about the
+world beyond them (that is why every model fails CommonsenseQA; see the README).
+
+### Corpus B: `data/web/`, big and general (~1.5 GB)
+
+Built by `scripts/prepare_web.py` from [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu):
+educational web pages filtered from Common Crawl, the data that small open models such as SmolLM learn from.
+It has nothing to do with our four tasks, which is the point: like a real language model, Rhoa first reads
+general text, then learns the tasks.
+
+| File | Content |
+|---|---|
+| `train.txt`, `val.txt` | one web page per line (val: every 200th page, never trained on) |
+| `tokenizer.json` | the BPE tokenizer (8,192 tokens) learned on the first 200 MB of `train.txt` |
+| `train.bin`, `val.bin` | every page as token ids (uint16), pages separated by `<sep>` |
+| `stats.json` | how many pages, bytes and tokens |
+
+Size: 1.50 GB of text, 358.7 million tokens to train on (1.9 million more for validation).
+The first words of three lines of `train.txt` (each line is a whole page, often thousands of words):
 
 ```
-mary went to the bedroom . john journeyed to the bathroom . where is john ? sandra journeyed to the hallway . ...
-mary journeyed to the bedroom . fred moved to the bedroom . fred went to the bathroom . jeff went back to the office . ...
+Taking Play Seriously By ROBIN MARANTZ HENIG Published: February 17, 2008 On a drizzly Tuesday night in late January, …
+Bolivia: Coca-chewing protest outside US embassy Indigenous activists in Bolivia have been holding a mass coca-chewing …
+RWJF Priority: Use pricing strategies—both incentives and disincentives—to promote the purchase of healthier foods …
 ```
 
-Stories of all 20 bAbI tasks (training split only), every sentence and every question, **never the answer**.
-Nothing here says what the right answer is: this stage only teaches the language.
-
-### In the model: hide ~15% of the words, ask the model to guess them
-
-A real example (`mask_tokens` in `tiny_dlm/data.py`):
+The text is lowercased by the tokenizer, like the fine-tuning data. With the web tokenizer:
 
 ```
-original : [CLS] mary moved to the bathroom  .      john  went to the hallway . where is mary ?
-input    : [CLS] mary moved to the bathroom [MASK]  west  went to the hallway . where is mary ?
-target   :   -    -     -   -   -     -       .     john   -    -   -     -    -   -    -   -   -
-                                              ▲      ▲
-                                    hidden with [MASK]   replaced by a random word
+the heart pumps blood through the body   →    the| heart| p|umps| blood| through| the| body
 ```
 
-Of the picked words, 80% become `[MASK]`, 10% a random word (here `john` → `west`), and 10% stay the same.
-`-` means "not part of the loss". The model must use the words **on both sides** to guess.
+### From text to one training example (both corpora)
 
-### As tensors
+The model gets about 15% of the tokens hidden and must guess them, looking at the words on **both sides**
+(BERT's "masked language modelling"):
 
 ```
-idx      (b, s)   long   [2, 88, 93, 131, 124, 18, 4, 138, 137, 131, 124, 67, 5, 140, 74, 88, 6]
-targets  (b, s)   long   [-1, -1, -1, -1, -1, -1, 5, 78, -1, -1, -1, -1, -1, -1, -1, -1, -1]
-                                                  ▲   ▲
-                                                 "."  "john"   (-1 = ignored by the loss)
+text      mary moved to the bathroom . john went to the hallway . where is mary ?
+tokens    <cls>| mary| moved| to| the| bathroom| .| john| went| to| the| hallway| .| where| is| mary| ?
+input     <cls>|<mask>| moved| to| the| bathroom| .| john| went| to| the| hallway| .| where|<mask>| mary| ?
+targets            mary                                         to   the                  is
 ```
 
-Long stories are cut into chunks of at most `block_size` tokens, each starting with `[CLS]`.
+- Of the hidden tokens, 80% become `<mask>`, 10% a random token and 10% stay the same, so the model must check
+  every token, not only the masked ones (here `to` and `the` are hidden but left unchanged).
+- The tokens to hide are drawn again every time a text is used ("dynamic masking", as in RoBERTa).
+- The targets hold the hidden token where one was hidden and `-1` everywhere else; the loss only looks at those.
+- Corpus A: each line is one example (cut to 128 tokens). Corpus B: an example is a random 127-token window of
+  `train.bin`, after `<cls>`, so it may span the end of one page and the start of the next (marked by `<sep>`).
+
+A batch is a table of token ids, one row per example: 64 examples of 128 tokens make a 64 × 128 table for the input
+and the same for the targets.
 
 ---
 
 ## Stage 2: fine-tuning data (decisions)
 
-### On disk: a CSV with 3 columns
+Built by `scripts/prepare_data.py`. Every dataset has the same shape, `data/<dataset>/{train,val,test}.csv`, with
+three columns: the context, the options separated by `|`, and the right answer(s).
 
-| context | candidates | answers |
-|---|---|---|
-| `mary moved to the bathroom . john went to the hallway . where is mary ?` | `bathroom \| hallway` | `bathroom` |
-| `mary moved to the bathroom . john went to the hallway . daniel went back to the hallway . sandra moved to the garden . where is daniel ?` | `bathroom \| hallway \| garden` | `hallway` |
+| Dataset | Question | Options | Train / val / test |
+|---|---|---|---|
+| bAbI (task 1) | where is someone, after a short story? | 2–6 places | 9,000 / 1,000 / 1,000 |
+| CLINC150 | which of 150 assistant intents (or "out of scope")? | 151 | 15,100 / 3,100 / 5,500 |
+| Banking77 | which of 77 banking intents? | 77 | 9,003 / 1,000 / 3,080 |
+| CommonsenseQA | everyday-knowledge question | 5 | 8,658 / 961 / 1,197 |
 
-- **context**: the story so far + the question.
-- **candidates**: the possible answers, separated by `|`. Here, the places mentioned in the story (2 to 6).
-- **answers**: the right one(s). Always one of the candidates. Several are allowed (`a | b`): each gets an equal share.
-
-How many candidates the 9,000 training decisions have:
-
-```
-2 options  ██████████████▋              1,761
-3 options  ██████████▉                  1,318
-4 options  ███████████████████▏         2,303
-5 options  ███████████████████▎         2,314
-6 options  ██████████▊                  1,304
-```
-
-### In the model: one sequence per candidate
-
-The second row above becomes **3** sequences, one per candidate. Only the last word changes:
+One real row of each (options shortened):
 
 ```
-[CLS] mary moved to the bathroom . john went ... where is daniel ? [SEP] bathroom
-[CLS] mary moved to the bathroom . john went ... where is daniel ? [SEP] hallway     ◀── right answer
-[CLS] mary moved to the bathroom . john went ... where is daniel ? [SEP] garden
+babi       context     mary moved to the bathroom . john went to the hallway . … john moved to the office . … where is john ?
+           candidates  bathroom | hallway | garden | office
+           answers     office
+
+clinc150   context     tell me how to say 'it is a beautiful morning' in italian
+           candidates  accept reservations | account blocked | alarm | application status | apr | …   (151)
+           answers     translate
+
+banking77  context     why did i get charged a fee i thought it was free ?
+           candidates  activate my card | age limit | apple pay or google pay | atm support | …   (77)
+           answers     cash withdrawal charge
+
+csqa       context     where would you stand in a line and not need a coat if it is cold outside ?
+           candidates  good book | bus stop | post office | triangle | graph
+           answers     post office
 ```
 
-### As tensors: a batch of 2 decisions (2 and 3 candidates)
+### From a row to what the model sees
+
+Each option gets its own copy of the question: `<cls> question <sep> option`. The model reads each copy and gives
+it one score; the scores of a question's options go through a softmax, and the right option should win.
+
+The CommonsenseQA row above, with the BPE tokenizer (5 options, 23 tokens each after padding):
 
 ```
-idx        (B=2, K=3, T=32)  long    token ids; decision 1's 3rd slot is empty (a lone [CLS])
+<cls>| where| would| you| stand| in| a| line| and| not| need| a| co|at| if| it| is| cold| outside| ?|<sep>| good| book
+<cls>| where| would| you| stand| in| a| line| and| not| need| a| co|at| if| it| is| cold| outside| ?|<sep>| bus| stop
+<cls>| where| would| you| stand| in| a| line| and| not| need| a| co|at| if| it| is| cold| outside| ?|<sep>| post| office   ← right
+<cls>| where| would| you| stand| in| a| line| and| not| need| a| co|at| if| it| is| cold| outside| ?|<sep>| triangle|<pad>
+<cls>| where| would| you| stand| in| a| line| and| not| need| a| co|at| if| it| is| cold| outside| ?|<sep>| gra|ph
 
-cand_mask  (B=2, K=3)        bool    [[True, True, False],     ◀── decision 1 has only 2 candidates
-                                      [True, True, True ]]
-
-targets    (B=2, K=3)        float   [[1.0, 0.0, 0.0],         ◀── bathroom is right
-                                      [0.0, 1.0, 0.0]]         ◀── hallway is right
+cand_mask   [True, True, True, True, True]      which option slots are real
+targets     [0, 0, 1, 0, 0]                      the right answer (split equally if several are right)
 ```
 
-- **K** = the most candidates in the batch. Shorter decisions get empty slots, which `cand_mask` hides.
-- **T** = the longest sequence in the batch. Shorter sequences are padded with `[PAD]`, which attention ignores.
-- **targets** sum to 1 per decision. With two right answers they would be `0.5, 0.5`.
+- A batch holds several questions. They can have different numbers of options: the batch is padded to the largest,
+  and `cand_mask` marks the empty slots so they never get any probability.
+- Training keeps the right answer plus random wrong ones, at most 16 options per question
+  (`--max_train_candidates`): CLINC150's 151 options would be 10x slower. Accuracy is always measured with
+  **all** the options.
+- `--tasks babi,clinc150,banking77,csqa` trains one model on all four: each batch comes from one dataset, picked in
+  proportion to its size.
 
 ---
 
-## The vocabulary
+## Tokens: two tokenizers
 
-One word-level tokenizer for both stages, built from the training text (`tiny_dlm/tokenizer.py`): **152 tokens**.
+The same sentence, cut by each tokenizer (`tiny_dlm/tokenizer.py`, details in the README):
 
 ```
-id    0       1       2       3       4        5   6   7   8       ...
-     <pad>   <unk>   <cls>   <sep>   <mask>    .   ?   a   above   ...
+WTokenizer    what's|the|usual|time|to|get|a|new|card|when|your|previous|one|was|lost
+BPETokenizer  what|'|s| the| us|ual| time| to| get| a| new| card| when| your| previous| one| was| lost
 ```
 
-Text is lowercased and split into words, `.` and `?` (sentence ends matter: the **last** sentence about a person
-is the one that answers "where is ...?"). A word never seen in training becomes `<unk>`.
+- `WTokenizer`: one token per whole word. Simple, but a word it never saw becomes `<unk>`.
+- `BPETokenizer`: pieces of words learned from the text (byte pair encoding). Common words are one token, rare ones
+  are built from pieces (`" us" + "ual"`), and nothing is ever unknown. Each text starts with a space, so a word is
+  the same token at the start of a text and in the middle.
 
 ## Side by side
 
 | | Stage 1: pre-training | Stage 2: fine-tuning |
 |---|---|---|
-| File | `pretrain_*.txt` | `train/val/test.csv` |
-| One example | one story chunk | one decision (context + K candidates) |
+| Files | `data/pretrain/pretrain_*.txt` or `data/web/*.bin` | `data/<dataset>/{train,val,test}.csv` |
+| One example | a piece of text with hidden tokens | a question with all its options |
 | Has answers? | no | yes |
-| Input tensor | `idx (b, s)` with some `[MASK]` | `idx (b, k, s)`, one row per candidate |
-| Target tensor | `targets (b, s)`: the hidden word, `-1` elsewhere | `targets (b, k)`: probability of each candidate |
-| Extra | | `cand_mask (b, k)`: which slots are real |
-| Built by | `make_chunks`, `mask_tokens` | `load_csv`, `collate` |
+| The model outputs | a guess over the whole vocabulary at each hidden token | one score per option |
+| Built by | `make_chunks`, `get_stream_batch`, `mask_tokens` | `load_csv`, `collate` |

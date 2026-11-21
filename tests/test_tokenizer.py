@@ -6,14 +6,21 @@ TEXTS = ["the cat sat on the mat", "the cat ate", "a cat and a hat"]
 
 
 def test_bpe_merges_the_most_frequent_pair_first():
-    tok = BPETokenizer.train(["ab ab ab", "ab"], vocab_size=5 + 256 + 1)  # room for exactly one merge
+    tok = BPETokenizer.train(["ab ab ab", "ab"], vocab_size=5 + 256 + 1, prefix_space=False)  # room for one merge
     assert tok.itos[-1] == "ab"  # "a"+"b" appears 4 times: the first merge
     assert tok.tokens("ab ab") == ["ab", " ", "ab"]  # " ab": the space stays alone, "ab" is merged
 
 
+def test_bpe_prefix_space_writes_a_word_the_same_everywhere():
+    tok = BPETokenizer.train(["the post office", "a post office"] * 5, vocab_size=300)
+    assert tok.tokens("post office") == [" post", " office"]  # at the start of a text too
+    assert tok.encode("post") == tok.encode("the post")[1:]
+    assert tok.decode(tok.encode("post office")) == "post office"  # the added space is removed again
+
+
 def test_bpe_common_words_become_one_token():
     tok = BPETokenizer.train(TEXTS * 10, vocab_size=300)
-    assert tok.tokens("the cat") == ["the", " cat"]
+    assert tok.tokens("the cat") == [" the", " cat"]
     assert len(tok.tokens("zebra")) > 1  # never seen: built from pieces, never <unk>
 
 

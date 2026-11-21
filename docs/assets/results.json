@@ -7,7 +7,8 @@
     "rhoa_gpt2_scratch": "Rhoa 4x128 GPT-2 blocks \u00b7 no pre-training",
     "melon": "M\u0113lon 4x128",
     "melon_small": "M\u0113lon 2x64",
-    "melon_maze": "M\u0113lon 4x128 (maze)"
+    "melon_maze": "M\u0113lon 8x128",
+    "melon_maze_4layers": "M\u0113lon 4x128"
   },
   "test": {
     "babi": {
@@ -185,9 +186,13 @@
       "solved": 0.085,
       "steps_over_shortest": 4.357142857142857
     },
-    "melon_maze": {
+    "melon_maze_4layers": {
       "solved": 0.505,
       "steps_over_shortest": 1.0096463022508038
+    },
+    "melon_maze": {
+      "solved": 0.97,
+      "steps_over_shortest": 1.0
     }
   }
 }

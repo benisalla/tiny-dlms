@@ -378,8 +378,8 @@ and the goal (green), drawn 48x48 with **one 6x6 patch per cell**. The options a
   when possible, no planning) and random. To show it plans, Mēlon has to beat greedy.
 
 ```bash
-python scripts/maze_sanity_check.py --n_layer 4 --n_embd 128
-python scripts/maze_train.py --n_layer 4 --n_embd 128
+python scripts/maze_sanity_check.py --n_layer 8 --n_embd 128
+python scripts/maze_train.py --n_layer 8 --n_embd 128 --learning_rate 3e-4 --min_lr 3e-5 --max_iters 30000 --lr_decay_iters 30000
 python scripts/maze_play.py --video maze.mp4      # Mēlon vs teacher vs greedy vs random, + a video
 ```
 
@@ -393,7 +393,7 @@ Every model is tested on the same held-out data, next to simple baselines:
 | `rhoa_small` / `rhoa_small_scratch` | 2 x 64 | Llama | with / without |
 | `rhoa_gpt2_scratch` | 4 x 128 | GPT-2 (LayerNorm, learned positions, GELU, biases) | without |
 | `melon` / `melon_small` | 4 x 128 / 2 x 64 | Llama | (car) |
-| `melon_maze` | 4 x 128 | Llama | (maze) |
+| `melon_maze` / `melon_maze_4layers` | 8 x 128 / 4 x 128 | Llama | (maze) |
 
 Baselines: random guessing (mean of 1/k), the bAbI shortcut "answer the last place mentioned", and for the car the
 teacher, "always straight" and random drivers. The table and `benchmark.png` are on the project page.
@@ -455,7 +455,7 @@ with **all** the options. Graphs, videos and the interactive demo are on the pro
 | Mēlon | Result | Teacher | Simple baselines |
 |---|---|---|---|
 | drives CarRacing, 5 unseen tracks (4x128 / 2x64) | **913 / 913** | 913 | always straight -26, random -40 |
-| plays mazes, 200 unseen | 50% solved, on the shortest path when it solves | 100% | greedy 74%, random 8% |
+| plays mazes, 200 unseen (8x128 / 4x128) | **97.0%** / 50.0% solved, always on the shortest path | 100% | greedy 74% (paths 1.47x longer), random 8.5% |
 
 **What we learned**
 
@@ -470,8 +470,10 @@ with **all** the options. Graphs, videos and the interactive demo are on the pro
   rate (1e-3) suits the Llama blocks better: GPT-2 blocks learn faster at 3e-4. So this comparison favours Llama blocks.
 - **CommonsenseQA fails for every model** (below random): they memorise the training questions (90-99% train accuracy)
   but tiny models trained on ~1M words have no world knowledge to generalise from. An honest limit.
-- **Mēlon drives as well as its teacher** from pixels only, even at 2x64. The maze is harder: when Mēlon solves a maze it
-  takes the shortest path (it plans), but it solves only half of them.
+- **Mēlon drives as well as its teacher** from pixels only, even at 2x64.
+- **Depth is what plans.** On the maze, 4 layers solved 50% of unseen mazes; 8 layers (30,000 steps, lr 3e-4) solve
+  **97%**, always by the shortest path, from the picture alone. A path is found by passing information along the
+  corridors, one hop per attention layer: more layers, longer routes. Greedy (no planning) solves 74%.
 - **How the best model is chosen matters.** With four datasets mixed, the validation loss swung between 0.4 and 2.0 from
   one evaluation to the next. The first full run kept the model of step 3,000 because of that noise. Models are now
   kept by mean validation accuracy, measured on fixed samples.

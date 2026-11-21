@@ -8,7 +8,7 @@ Writes docs/assets/results.json (read by the project page and scripts/plot_metri
              rhoa (4x128, pre-trained), rhoa_scratch, rhoa_small, rhoa_small_scratch, rhoa_gpt2_scratch
            baselines: random guessing (mean of 1/k); on bAbI the "last place mentioned" shortcut
     Mēlon  CarRacing score on 5 unseen tracks: melon, melon_small vs teacher, always straight, random
-           Maze: share of 200 unseen mazes solved: melon_maze vs teacher (shortest path), greedy, random
+           Maze: share of 200 unseen mazes solved: melon_maze (8x128), melon_maze_4layers vs teacher, greedy, random
 """
 import argparse
 import json
@@ -52,7 +52,7 @@ def main(argv=None):
     ckpt = lambda name: os.path.join(args.ckpt_dir, f"{name}.pt")  # noqa: E731
 
     results = json.load(open(args.out)) if os.path.exists(args.out) else {}
-    results["names"] = {**RHOA, **MELON_CAR, "melon_maze": "Mēlon 4x128 (maze)"}
+    results["names"] = {**RHOA, **MELON_CAR, "melon_maze": "Mēlon 8x128", "melon_maze_4layers": "Mēlon 4x128"}
 
     # ---------------------------------------------------------------- Rhoa
     results["test"] = {}
@@ -84,7 +84,8 @@ def main(argv=None):
         from maze_play import evaluate, model_player, simple_players
         from tiny_dlm import maze
         mazes = maze.test_mazes(args.mazes)
-        players = {**simple_players(random.Random(0)), "melon_maze": model_player(ckpt("melon_maze"), device)}
+        players = {**simple_players(random.Random(0)),
+                   **{n: model_player(ckpt(n), device) for n in ("melon_maze_4layers", "melon_maze") if found(n)}}
         results["maze"] = {name: evaluate(play, mazes) for name, play in players.items()}
         print("maze (unseen): " + " | ".join(f"{k} {v['solved']:.0%}" for k, v in results["maze"].items()))
 

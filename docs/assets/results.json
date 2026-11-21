@@ -5,6 +5,10 @@
     "rhoa_small": "Rhoa 2x64 \u00b7 pre-trained",
     "rhoa_small_scratch": "Rhoa 2x64 \u00b7 no pre-training",
     "rhoa_gpt2_scratch": "Rhoa 4x128 GPT-2 blocks \u00b7 no pre-training",
+    "rhoa_bpe": "Rhoa 4x128 BPE \u00b7 pre-trained",
+    "rhoa_bpe_scratch": "Rhoa 4x128 BPE \u00b7 no pre-training",
+    "rhoa_small_bpe": "Rhoa 2x64 BPE \u00b7 pre-trained",
+    "rhoa_small_bpe_scratch": "Rhoa 2x64 BPE \u00b7 no pre-training",
     "melon": "M\u0113lon 4x128",
     "melon_small": "M\u0113lon 2x64",
     "melon_maze": "M\u0113lon 8x128",
@@ -23,7 +27,11 @@
         "rhoa_scratch": 0.989,
         "rhoa_small": 0.873,
         "rhoa_small_scratch": 0.516,
-        "rhoa_gpt2_scratch": 0.494
+        "rhoa_gpt2_scratch": 0.494,
+        "rhoa_bpe": 0.843,
+        "rhoa_bpe_scratch": 0.939,
+        "rhoa_small_bpe": 0.747,
+        "rhoa_small_bpe_scratch": 0.508
       }
     },
     "clinc150": {
@@ -37,7 +45,11 @@
         "rhoa_scratch": 0.6638181818181819,
         "rhoa_small": 0.7152727272727273,
         "rhoa_small_scratch": 0.6187272727272727,
-        "rhoa_gpt2_scratch": 0.5618181818181818
+        "rhoa_gpt2_scratch": 0.5618181818181818,
+        "rhoa_bpe": 0.6929090909090909,
+        "rhoa_bpe_scratch": 0.6712727272727272,
+        "rhoa_small_bpe": 0.6769090909090909,
+        "rhoa_small_bpe_scratch": 0.6605454545454545
       }
     },
     "banking77": {
@@ -51,7 +63,11 @@
         "rhoa_scratch": 0.7961038961038961,
         "rhoa_small": 0.8172077922077922,
         "rhoa_small_scratch": 0.7928571428571428,
-        "rhoa_gpt2_scratch": 0.6548701298701298
+        "rhoa_gpt2_scratch": 0.6548701298701298,
+        "rhoa_bpe": 0.8165584415584416,
+        "rhoa_bpe_scratch": 0.8042207792207792,
+        "rhoa_small_bpe": 0.7922077922077922,
+        "rhoa_small_bpe_scratch": 0.7792207792207793
       }
     },
     "csqa": {
@@ -65,7 +81,11 @@
         "rhoa_scratch": 0.1545530492898914,
         "rhoa_small": 0.17543859649122806,
         "rhoa_small_scratch": 0.17376775271512113,
-        "rhoa_gpt2_scratch": 0.1620718462823726
+        "rhoa_gpt2_scratch": 0.1620718462823726,
+        "rhoa_bpe": 0.1796157059314954,
+        "rhoa_bpe_scratch": 0.16290726817042606,
+        "rhoa_small_bpe": 0.15622389306599832,
+        "rhoa_small_bpe_scratch": 0.15789473684210525
       }
     }
   },
@@ -193,6 +213,71 @@
     "melon_maze": {
       "solved": 0.97,
       "steps_over_shortest": 1.0
+    }
+  },
+  "tokenizers": {
+    "rhoa": {
+      "tokenizer": "word",
+      "vocab": 10892,
+      "weights": 2706560,
+      "tokens_per_word": 1.0,
+      "unknown": 0.00591911233938994
+    },
+    "rhoa_scratch": {
+      "tokenizer": "word",
+      "vocab": 14333,
+      "weights": 3147008,
+      "tokens_per_word": 1.0,
+      "unknown": 0.005259141625590364
+    },
+    "rhoa_small": {
+      "tokenizer": "word",
+      "vocab": 10892,
+      "weights": 894272,
+      "tokens_per_word": 1.0,
+      "unknown": 0.00591911233938994
+    },
+    "rhoa_small_scratch": {
+      "tokenizer": "word",
+      "vocab": 14333,
+      "weights": 1114496,
+      "tokens_per_word": 1.0,
+      "unknown": 0.005259141625590364
+    },
+    "rhoa_gpt2_scratch": {
+      "tokenizer": "word",
+      "vocab": 14333,
+      "weights": 2826624,
+      "tokens_per_word": 1.0,
+      "unknown": 0.005259141625590364
+    },
+    "rhoa_bpe": {
+      "tokenizer": "bpe",
+      "vocab": 4096,
+      "weights": 1836672,
+      "tokens_per_word": 1.183224369418607,
+      "unknown": 0.0
+    },
+    "rhoa_bpe_scratch": {
+      "tokenizer": "bpe",
+      "vocab": 4096,
+      "weights": 1836672,
+      "tokens_per_word": 1.086249922659682,
+      "unknown": 0.0
+    },
+    "rhoa_small_bpe": {
+      "tokenizer": "bpe",
+      "vocab": 4096,
+      "weights": 459328,
+      "tokens_per_word": 1.183224369418607,
+      "unknown": 0.0
+    },
+    "rhoa_small_bpe_scratch": {
+      "tokenizer": "bpe",
+      "vocab": 4096,
+      "weights": 459328,
+      "tokens_per_word": 1.086249922659682,
+      "unknown": 0.0
     }
   }
 }

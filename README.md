@@ -487,6 +487,31 @@ with **all** the options. Graphs, videos and the interactive demo are on the pro
 | drives CarRacing, 5 unseen tracks (4x128 / 2x64) | **913 / 913** | 913 | always straight -26, random -40 |
 | plays mazes, 200 unseen (8x128 / 4x128) | **97.0%** / 50.0% solved, always on the shortest path | 100% | greedy 74% (paths 1.47x longer), random 8.5% |
 
+### Word tokenizer vs BPE
+
+The same four Rhoa models trained twice, with the same steps and settings; only the tokenizer changes
+(`scripts/compare_tokenizers.sh`). This first BPE version had no leading space (see below).
+
+![tokenizers](docs/assets/plots/tokenizers.png)
+
+| Test accuracy: word / BPE | bAbI | CLINC150 | Banking77 | CommonsenseQA | Weights |
+|---|---|---|---|---|---|
+| 4x128, pre-trained | **89.8** / 84.3 | **71.3** / 69.3 | **83.1** / 81.7 | 17.6 / **18.0** | 2.71 M / 1.84 M |
+| 4x128, no pre-training | **98.9** / 93.9 | 66.4 / **67.1** | 79.6 / **80.4** | 15.5 / **16.3** | 3.15 M / 1.84 M |
+| 2x64, pre-trained | **87.3** / 74.7 | **71.5** / 67.7 | **81.7** / 79.2 | **17.5** / 15.6 | 0.89 M / 0.46 M |
+| 2x64, no pre-training | **51.6** / 50.8 | 61.9 / **66.1** | **79.3** / 77.9 | **17.4** / 15.8 | 1.11 M / 0.46 M |
+
+- **BPE models are 30-60% smaller** (4,096 tokens instead of 10,000-14,000 words) and never meet an unknown word,
+  but on our data the word tokenizer is ahead in most cells, by 1 to 5 points (12 on small pre-trained bAbI).
+- **Why words win here:** our four datasets are small, clean and lowercase, with a closed vocabulary: the word
+  tokenizer knows 99.4% of the test words. BPE's strength (rare words, typos, new words) has little to work with, and
+  it makes texts ~10-20% longer.
+- **Without pre-training, BPE helps on CLINC150** (+0.7 and +4.2 points): pieces of words are shared between related
+  words, which is useful when a model learns everything from the task data alone.
+- **A flaw this comparison found:** the first word of every option had no leading space, so `"post office"` became
+  `p|ost| office` while the same word inside a sentence is ` post`. Since then every text starts with a space
+  (as in GPT-2 and RoBERTa); the models above keep the old behaviour, so their results stay valid.
+
 **What we learned**
 
 - **Pre-training helps on real language.** On the two intent datasets (real user requests), pre-training on ~1M words

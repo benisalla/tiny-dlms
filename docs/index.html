@@ -66,6 +66,7 @@
   .bar.right .opt::after { content: " ✓"; color: var(--good); }
   .status { margin-top: 10px; font-size: 0.9rem; color: var(--muted); min-height: 1.4em; }
   footer { margin-top: 80px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 20px; }
+  .scroll { overflow-x: auto; max-width: 100%; }
 </style>
 </head>
 <body>
@@ -155,6 +156,7 @@
     <div id="table"></div>
     <div class="plots" style="margin-top:20px">
       <img class="plot" src="assets/plots/benchmark.png" alt="Test accuracy of every Rhoa model on every dataset, with baselines">
+      <img class="plot" src="assets/plots/tokenizers.png" alt="Word tokenizer vs BPE: the same Rhoa models, test accuracy on every dataset">
       <img class="plot" src="assets/plots/rhoa_accuracy.png" alt="Validation accuracy per dataset during training, with and without pre-training">
       <img class="plot" src="assets/plots/rhoa_loss.png" alt="Decision loss during training, with and without pre-training">
       <img class="plot" src="assets/plots/rhoa_pretraining.png" alt="Pre-training masked-word loss and accuracy">
@@ -292,17 +294,18 @@ async function results() {
     const r = await (await fetch("assets/results.json")).json();
     const label = (n) => (r.names && r.names[n]) || n;
     let html = "";
-    if (r.test) {  // Rhoa: one row per dataset, one column per model and baseline
+    if (r.test) {  // Rhoa: one row per model, one column per dataset; the best of each column in bold
+      const tasks = Object.keys(r.test);
       const models = [...new Set(Object.values(r.test).flatMap((row) => Object.keys(row.models)))];
-      html += "<h3>Rhoa · test accuracy</h3><table><tr><th>Dataset</th><th>Options</th>"
-        + models.map((m) => `<th>${label(m)}</th>`).join("") + "<th>Baselines</th></tr>";
-      for (const [t, row] of Object.entries(r.test)) {
-        const best = Math.max(...Object.values(row.models));
-        html += `<tr><td>${NAMES[t] || t}</td><td class="num">${row.options}</td>`
-          + models.map((m) => `<td class="num">${row.models[m] === best ? "<strong>" + pct(row.models[m]) + "</strong>" : pct(row.models[m])}</td>`).join("")
-          + `<td class="num muted">${Object.entries(row.baselines).map(([b, v]) => `${b} ${pct(v)}`).join(" · ")}</td></tr>`;
-      }
-      html += "</table>";
+      const best = Object.fromEntries(tasks.map((t) => [t, Math.max(...Object.values(r.test[t].models))]));
+      const cell = (t, v) => `<td class="num">${v === best[t] ? "<strong>" + pct(v) + "</strong>" : pct(v)}</td>`;
+      html += "<h3>Rhoa · test accuracy (all options)</h3><div class='scroll'><table><tr><th>Model</th>"
+        + tasks.map((t) => `<th>${NAMES[t] || t}</th>`).join("") + "</tr>";
+      for (const m of models) html += `<tr><td>${label(m)}</td>` + tasks.map((t) => cell(t, r.test[t].models[m])).join("") + "</tr>";
+      const baselines = [...new Set(tasks.flatMap((t) => Object.keys(r.test[t].baselines)))];
+      for (const b of baselines) html += `<tr class="muted"><td><em>${b}</em></td>`
+        + tasks.map((t) => `<td class="num">${pct(r.test[t].baselines[b])}</td>`).join("") + "</tr>";
+      html += "</table></div>";
     }
     if (r.car) {
       html += "<h3 style='margin-top:24px'>Mēlon drives · CarRacing score on unseen tracks (900 = solved)</h3><table><tr><th>Driver</th><th>Mean score</th></tr>";

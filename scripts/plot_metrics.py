@@ -52,10 +52,12 @@ def line(ax, rows, key, color, label, style="-"):
                     textcoords="offset points", va="center", fontsize=9, color=INK)
 
 
-def save(fig, out, name, top=None):
+def save(fig, out, name, top=None, bottom=None):
     fig.tight_layout()
     if top:  # room above the panels for a shared legend
         fig.subplots_adjust(top=top)
+    if bottom:  # room below the panels for a shared legend
+        fig.subplots_adjust(bottom=bottom)
     path = os.path.join(out, name)
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -213,9 +215,10 @@ def main(argv=None):
             ax.grid(axis="x", visible=False)
         axes[0][0].yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
         axes[0][0].set(ylim=(0, 1.1), ylabel="test accuracy (all options)")
-        axes[0][0].legend(fontsize=8, loc="upper left")
+        handles, labels = axes[0][0].get_legend_handles_labels()
+        fig.legend(handles, labels, fontsize=9, ncol=2, loc="lower center", bbox_to_anchor=(0.5, 0.0))
         fig.suptitle("Word tokenizer vs BPE · same models, same training (dotted: random guessing)", color=INK)
-        save(fig, args.out, "tokenizers.png")
+        save(fig, args.out, "tokenizers.png", bottom=0.2)
 
     merged["validation"] = results
     with open(path, "w") as f:

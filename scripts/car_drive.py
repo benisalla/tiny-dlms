@@ -20,6 +20,7 @@ import random
 import numpy as np
 import torch
 
+from tiny_dlm import video
 from tiny_dlm.car import OPTION_ACTIONS, OPTION_TEXTS, expert, make_env, nearest_option, preprocess
 from tiny_dlm.runtime import resolve_device
 from tiny_dlm.vision import encode_options, load_image_dlm
@@ -60,17 +61,6 @@ def run(env, drive, seed, max_steps=1000, frames=None):
     return total
 
 
-def load_font(size):
-    """A font that has Greek-style letters (ē) when one is installed, else Pillow's built-in one."""
-    from PIL import ImageFont
-    for path in ("DejaVuSans.ttf", "/System/Library/Fonts/Supplemental/Arial.ttf", "arial.ttf"):
-        try:
-            return ImageFont.truetype(path, size)
-        except OSError:
-            continue
-    return ImageFont.load_default(size=size)
-
-
 def draw_frame(frame, j, probs, score, title="Mēlon drives"):
     """
         One video frame: the car on the left, every option with its probability on the right.
@@ -83,7 +73,7 @@ def draw_frame(frame, j, probs, score, title="Mēlon drives"):
             └──────────────┴──────────────────────────────────────┘
     """
     from PIL import Image, ImageDraw
-    font, big = load_font(15), load_font(22)
+    font, big = video.load_font(15), video.load_font(22)
     if not big.getmask("ē").getbbox():  # the built-in font has no "ē"
         title = title.replace("ē", "e")
     img = Image.new("RGB", (900, 450), (18, 18, 24))
@@ -102,21 +92,9 @@ def draw_frame(frame, j, probs, score, title="Mēlon drives"):
     return img
 
 
-def save_video(frames, path, every=2, fps=25):
-    """frames -> .mp4 (ffmpeg) or .gif (Pillow). every=2 keeps one frame in two."""
-    import os
-    import subprocess
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    images = [draw_frame(*f) for f in frames[::every]]
-    if path.endswith(".gif"):
-        small = [im.resize((480, 240)) for im in images[::2][:150]]  # a light GIF for READMEs: ~24 s, half size
-        small[0].save(path, save_all=True, append_images=small[1:], duration=2000 // fps, loop=0, optimize=True)
-    else:
-        w, h = images[0].size
-        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
-               "-r", str(fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", path]
-        subprocess.run(cmd, input=b"".join(im.tobytes() for im in images), check=True)
-    print(f"saved {len(images)} frames to {path}")
+def save_video(frames, paths):
+    """One video frame for every second step; the GIF is a light ~24 s version for READMEs."""
+    video.save_video([draw_frame(*f) for f in frames[::2]], paths, fps=25, gif_size=(480, 240), gif_every=2, gif_max=150)
 
 
 def main(argv=None):
@@ -143,8 +121,8 @@ def main(argv=None):
         for i, seed in enumerate(seeds):
             frames = [] if (args.video and name == "model" and i == 0) else None
             rewards.append(run(env, drivers[name], seed, frames=frames))
-            for path in (args.video if frames else []):
-                save_video(frames, path)
+            if frames:
+                save_video(frames, args.video)
         results[name] = rewards
         print(f"{name:9s} mean reward {np.mean(rewards):6.0f} | per track " + " ".join(f"{r:.0f}" for r in rewards))
     return results

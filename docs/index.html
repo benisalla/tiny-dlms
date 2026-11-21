@@ -91,7 +91,8 @@
         <div class="name">Mēlon</div>
         <div class="greek">μῆλον · the golden apple</div>
         <p>Paris looked at three goddesses and handed the apple to one. Mēlon <strong>looks at images</strong>: from the
-          camera of a race car it picks how much to steer, accelerate or brake.</p>
+          camera of a race car it picks how much to steer, accelerate or brake, and from a picture of a maze it picks
+          the next move.</p>
       </div>
     </div>
   </section>
@@ -134,6 +135,11 @@
         <p class="muted">Left: the camera. Right: the 15 options with Mēlon's probabilities, the chosen one in green.</p>
       </div>
       <div>
+        <h3>Mēlon plays mazes it has never seen</h3>
+        <video src="assets/maze.mp4" controls muted loop playsinline preload="metadata"></video>
+        <p class="muted">From the picture alone it picks go up, down, left or right. No map, no search: just a judge.</p>
+      </div>
+      <div>
         <h3>Rhoa answers test questions</h3>
         <video src="assets/rhoa.mp4" controls muted loop playsinline preload="metadata"></video>
         <p class="muted">Real test questions, right or wrong. For 151 options, the most likely ones are shown.</p>
@@ -142,15 +148,18 @@
   </section>
 
   <section id="results">
-    <h2>Results</h2>
-    <p class="muted">Accuracy on held-out test data, with <strong>all</strong> the options. Does pre-training help? The
-      same Rhoa is fine-tuned twice: once after pre-training on ~1M words, once from random weights.</p>
+    <h2>Benchmark</h2>
+    <p class="muted">Every model on held-out test data it never saw, with <strong>all</strong> the options, next to
+      simple baselines. Does pre-training help? Each Rhoa size is fine-tuned twice: once after pre-training on ~1M
+      words, once from random weights.</p>
     <div id="table"></div>
     <div class="plots" style="margin-top:20px">
+      <img class="plot" src="assets/plots/benchmark.png" alt="Test accuracy of every Rhoa model on every dataset, with baselines">
       <img class="plot" src="assets/plots/rhoa_accuracy.png" alt="Validation accuracy per dataset during training, with and without pre-training">
       <img class="plot" src="assets/plots/rhoa_loss.png" alt="Decision loss during training, with and without pre-training">
       <img class="plot" src="assets/plots/rhoa_pretraining.png" alt="Pre-training masked-word loss and accuracy">
       <img class="plot" src="assets/plots/melon.png" alt="Mēlon loss and steering accuracy">
+      <img class="plot" src="assets/plots/maze.png" alt="Mēlon on the maze: good moves and mazes solved during training">
       <img class="plot" src="assets/plots/health.png" alt="Learning rate and gradient norm of every run">
     </div>
   </section>
@@ -252,17 +261,34 @@ async function start() {
 }
 
 async function results() {
+  const pct = (v) => v == null ? "–" : (v * 100).toFixed(1) + "%";
   try {
     const r = await (await fetch("assets/results.json")).json();
-    if (!r.test) return;
-    let html = "<table><tr><th>Dataset</th><th>Options</th><th>Rhoa with pre-training</th><th>Rhoa without</th><th>Random guess</th></tr>";
-    for (const [t, v] of Object.entries(r.test)) {
-      html += `<tr><td>${NAMES[t] || t}</td><td class="num">${v.options}</td><td class="num"><strong>${(v.with_pretraining * 100).toFixed(1)}%</strong></td><td class="num">${(v.without_pretraining * 100).toFixed(1)}%</td><td class="num">${(v.random * 100).toFixed(1)}%</td></tr>`;
+    const label = (n) => (r.names && r.names[n]) || n;
+    let html = "";
+    if (r.test) {  // Rhoa: one row per dataset, one column per model and baseline
+      const models = [...new Set(Object.values(r.test).flatMap((row) => Object.keys(row.models)))];
+      html += "<h3>Rhoa · test accuracy</h3><table><tr><th>Dataset</th><th>Options</th>"
+        + models.map((m) => `<th>${label(m)}</th>`).join("") + "<th>Baselines</th></tr>";
+      for (const [t, row] of Object.entries(r.test)) {
+        const best = Math.max(...Object.values(row.models));
+        html += `<tr><td>${NAMES[t] || t}</td><td class="num">${row.options}</td>`
+          + models.map((m) => `<td class="num">${row.models[m] === best ? "<strong>" + pct(row.models[m]) + "</strong>" : pct(row.models[m])}</td>`).join("")
+          + `<td class="num muted">${Object.entries(row.baselines).map(([b, v]) => `${b} ${pct(v)}`).join(" · ")}</td></tr>`;
+      }
+      html += "</table>";
     }
-    if (r.melon_drive) {
-      html += `<tr><td>Mēlon · CarRacing (score, unseen tracks)</td><td class="num">15</td><td class="num" colspan="2"><strong>${r.melon_drive.model.toFixed(0)}</strong> (teacher ${r.melon_drive.teacher.toFixed(0)})</td><td class="num">${r.melon_drive.random.toFixed(0)}</td></tr>`;
+    if (r.car) {
+      html += "<h3 style='margin-top:24px'>Mēlon drives · CarRacing score on unseen tracks (900 = solved)</h3><table><tr><th>Driver</th><th>Mean score</th></tr>";
+      for (const [d, v] of Object.entries(r.car)) html += `<tr><td>${label(d)}</td><td class="num">${v.mean.toFixed(0)}</td></tr>`;
+      html += "</table>";
     }
-    $("table").innerHTML = html + "</table>";
+    if (r.maze) {
+      html += "<h3 style='margin-top:24px'>Mēlon plays the maze · unseen mazes</h3><table><tr><th>Player</th><th>Solved</th><th>Steps / shortest path</th></tr>";
+      for (const [p, v] of Object.entries(r.maze)) html += `<tr><td>${label(p)}</td><td class="num">${pct(v.solved)}</td><td class="num">${v.steps_over_shortest.toFixed(2)}</td></tr>`;
+      html += "</table>";
+    }
+    $("table").innerHTML = html;
   } catch (e) { /* results not published yet */ }
 }
 

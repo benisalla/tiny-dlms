@@ -365,6 +365,39 @@ python scripts/car_train.py           # -> checkpoints/car.pt
 python scripts/car_drive.py --video docs/assets/melon.mp4   # drive new tracks: model vs teacher vs straight vs random
 ```
 
+## Mēlon plays a maze (`tiny_dlm/maze.py`)
+
+The same image model learns a little game from pictures. The board is an 8x8 grid with random walls, the player (red)
+and the goal (green), drawn 48x48 with **one 6x6 patch per cell**. The options are `go up | go down | go left | go right`.
+
+- **Teacher:** breadth-first search. When several moves are equally short, all of them are right answers (the targets
+  are split between them).
+- **Data:** endless. New mazes are generated for every batch, sometimes after a few random moves, so the model also
+  learns to recover from a detour.
+- **Test:** 200 mazes never seen. Baselines: the teacher (always a shortest path), *greedy* (step toward the goal
+  when possible, no planning) and random. To show it plans, Mēlon has to beat greedy.
+
+```bash
+python scripts/maze_sanity_check.py --n_layer 4 --n_embd 128
+python scripts/maze_train.py --n_layer 4 --n_embd 128
+python scripts/maze_play.py --video maze.mp4      # Mēlon vs teacher vs greedy vs random, + a video
+```
+
+## Benchmark (`scripts/benchmark.sh`, `scripts/evaluate_all.py`)
+
+Every model is tested on the same held-out data, next to simple baselines:
+
+| Model | Size | Blocks | Pre-training |
+|---|---|---|---|
+| `rhoa` / `rhoa_scratch` | 4 x 128 | Llama (RMSNorm, RoPE, SwiGLU) | with / without |
+| `rhoa_small` / `rhoa_small_scratch` | 2 x 64 | Llama | with / without |
+| `rhoa_gpt2_scratch` | 4 x 128 | GPT-2 (LayerNorm, learned positions, GELU, biases) | without |
+| `melon` / `melon_small` | 4 x 128 / 2 x 64 | Llama | (car) |
+| `melon_maze` | 4 x 128 | Llama | (maze) |
+
+Baselines: random guessing (mean of 1/k), the bAbI shortcut "answer the last place mentioned", and for the car the
+teacher, "always straight" and random drivers. The table and `benchmark.png` are on the project page.
+
 ## Run it
 
 ```bash
@@ -377,6 +410,7 @@ python3 -m venv .venv
 
 QUICK=1 bash scripts/train_all.sh                 # the whole pipeline with 20 steps per stage (~8 min): checks it all works
 bash scripts/train_all.sh                         # the real run, one model after the other (a few hours)
+bash scripts/benchmark.sh                         # the other variants + the maze, then the benchmark (QUICK=1 too)
 .venv/bin/pytest                                  # tests
 ```
 
@@ -436,12 +470,16 @@ videos) are written to `docs/assets/` by `scripts/train_all.sh` and shown on the
 | `tiny_dlm/sanity.py` | standard health checks shared by both sanity scripts |
 | `tiny_dlm/vision.py` | `ImageDLM` (Mēlon): image patches + option words -> one score per option |
 | `tiny_dlm/car.py` | CarRacing: the 15 options, the teacher driver, frame preprocessing |
+| `tiny_dlm/maze.py` | the maze game: random boards, shortest-path teacher, pictures, play |
+| `tiny_dlm/video.py` | fonts and MP4 / GIF writing for the demo videos |
 | `scripts/prepare_babi.py` | bAbI -> decisions + pre-training text |
 | `scripts/prepare_data.py` | CLINC150, Banking77, CommonsenseQA -> decisions + shared pre-training text |
 | `scripts/train.py` / `finetune.py` / `ask.py` | stage 1 / stage 2 (one or several datasets) / ask a question |
 | `scripts/sanity_check.py` / `car_sanity_check.py` | health checks of Rhoa / Mēlon before training |
 | `scripts/car_record.py` / `car_train.py` / `car_drive.py` | record the teacher / train Mēlon / drive (+ video) |
 | `scripts/train_all.sh` | the whole pipeline, in order (`QUICK=1` for a fast end-to-end check) |
+| `scripts/benchmark.sh` | the other model variants and the maze, then the benchmark |
+| `scripts/maze_sanity_check.py` / `maze_train.py` / `maze_play.py` | health checks / train / play (+ video) the maze |
 | `scripts/evaluate_all.py` | final test of every model -> `docs/assets/results.json` |
 | `scripts/plot_metrics.py` | training graphs -> `docs/assets/plots/` |
 | `scripts/rhoa_demo.py` | demo video of Rhoa answering test questions |

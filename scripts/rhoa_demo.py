@@ -12,11 +12,11 @@ Datasets with many options (CLINC150: 151) show the most likely ones and "... an
 import argparse
 import os
 import random
-import subprocess
 import textwrap
 
 import torch
 
+from tiny_dlm import video
 from tiny_dlm.checkpoint import load_checkpoint
 from tiny_dlm.data import collate, load_csv
 from tiny_dlm.runtime import resolve_device
@@ -26,20 +26,10 @@ TITLES = {"babi": "bAbI · where is someone?", "clinc150": "CLINC150 · which in
 W, H, FPS = 960, 540, 25
 
 
-def load_font(size):
-    from PIL import ImageFont
-    for path in ("DejaVuSans.ttf", "/System/Library/Fonts/Supplemental/Arial.ttf", "arial.ttf"):
-        try:
-            return ImageFont.truetype(path, size)
-        except OSError:
-            continue
-    return ImageFont.load_default(size=size)
-
-
 def draw(task, decision, probs, grow, reveal, shown=8):
     """One frame. grow in [0, 1]: how far the bars have grown. reveal: show the pick and the right answer."""
     from PIL import Image, ImageDraw
-    small, font, big = load_font(16), load_font(20), load_font(26)
+    small, font, big = video.load_font(16), video.load_font(20), video.load_font(26)
     img = Image.new("RGB", (W, H), (18, 18, 24))
     d = ImageDraw.Draw(img)
     d.text((30, 20), "Rhoa decides", font=big, fill=(255, 214, 90))
@@ -102,17 +92,7 @@ def main(argv=None):
             frames += frames_for(task, decision, probs[0].cpu().tolist())
             print(f"{task:10s} {decision.candidates[int(probs[0].argmax())]!r:40s} right: {decision.answers}")
 
-    for path in args.out:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        if path.endswith(".gif"):
-            small = [f.resize((W // 2, H // 2)) for f in frames[::2]]
-            small[0].save(path, save_all=True, append_images=small[1:], duration=2000 // FPS, loop=0, optimize=True)
-        else:
-            cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
-                   "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", path]
-            subprocess.run(cmd, input=b"".join(f.tobytes() for f in frames), check=True)
-        print(f"saved {len(frames)} frames to {path}")
-
+    video.save_video(frames, args.out, fps=FPS, gif_size=(W // 2, H // 2), gif_every=2)
 
 if __name__ == "__main__":
     main()

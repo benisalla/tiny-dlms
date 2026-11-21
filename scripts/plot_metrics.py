@@ -7,7 +7,10 @@ Turn the training metrics (checkpoints/*.metrics.jsonl, written by tiny_dlm.trai
     rhoa_loss.png         decision loss (train and validation): with vs without pre-training
     rhoa_pretraining.png  stage 1: masked-word loss and masked-word accuracy
     melon.png             Mēlon: loss, and how often it picks the teacher's steering (exact / within one notch)
-    health.png            learning rate and gradient norm of every run (spikes = unstable training)
+    maze.png              Mēlon playing the maze: good moves and share of unseen mazes solved, during training
+    health.png            learning rate and gradient norm of the main runs (spikes = unstable training)
+    benchmark.png         test accuracy of every Rhoa model on every dataset, next to the baselines
+                          (from docs/assets/results.json, written by scripts/evaluate_all.py)
 """
 import argparse
 import json
@@ -18,7 +21,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
+BLUE, ORANGE, AQUA, YELLOW, MAGENTA = "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NAMES = {"babi": "bAbI (2-6 options)", "clinc150": "CLINC150 (151 options)",
          "banking77": "Banking77 (77 options)", "csqa": "CommonsenseQA (5 options)"}
@@ -66,7 +69,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     os.makedirs(args.out, exist_ok=True)
     runs = {name: read(os.path.join(args.ckpt_dir, f"{name}.pt.metrics.jsonl"))
-            for name in ("rhoa", "rhoa_scratch", "rhoa_pretrain", "melon")}
+            for name in ("rhoa", "rhoa_scratch", "rhoa_pretrain", "melon", "melon_maze")}
     results = {}
 
     # 1. accuracy per dataset: with vs without pre-training
@@ -132,8 +135,24 @@ def main(argv=None):
         results["melon"] = {"exact": ev[-1].get("val_acc/exact"), "within_one_notch": ev[-1].get("val_acc/within_one_notch")}
         save(fig, args.out, "melon.png")
 
-    # 5. training health: learning rate and gradient norm
-    present = [(n, tr) for n, (tr, _) in runs.items() if tr]
+    # 5. Mēlon plays the maze
+    _, ev = runs["melon_maze"]
+    if ev:
+        fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 3.2))
+        line(a1, ev, "train_loss", BLUE, "train")
+        line(a1, ev, "val_loss", ORANGE, "validation")
+        a1.set(title="Mēlon (maze) · loss", xlabel="training step", ylabel="cross-entropy over 4 moves")
+        a1.legend()
+        line(a2, ev, "val_acc/good_move", BLUE, "a shortest-path move")
+        line(a2, ev, "val_acc/solved", AQUA, "unseen mazes solved")
+        a2.set(title="Mēlon (maze) · validation", xlabel="training step")
+        a2.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
+        a2.set_ylim(0, 1.05)
+        a2.legend()
+        save(fig, args.out, "maze.png")
+
+    # 6. training health: learning rate and gradient norm
+    present = [(n, tr) for n, (tr, _) in runs.items() if tr and n != "melon_maze"]
     if present:
         fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 3.2))
         for (name, tr), color in zip(present, (BLUE, ORANGE, AQUA, YELLOW)):
@@ -146,6 +165,32 @@ def main(argv=None):
 
     path = os.path.join(os.path.dirname(args.out.rstrip("/")), "results.json")
     merged = json.load(open(path)) if os.path.exists(path) else {}  # keep the test results of evaluate_all.py
+
+    # 7. the benchmark: test accuracy of every Rhoa model on every dataset (grouped bars), baselines as ticks
+    test = merged.get("test", {})
+    names = [n for n in ("rhoa", "rhoa_scratch", "rhoa_small", "rhoa_small_scratch", "rhoa_gpt2_scratch")
+             if any(n in row["models"] for row in test.values())]
+    if names:
+        fig, ax = plt.subplots(figsize=(10, 3.8))
+        tasks = list(test)
+        width = 0.8 / len(names)
+        for n, (name, color) in enumerate(zip(names, (BLUE, ORANGE, AQUA, YELLOW, MAGENTA))):
+            xs = [t + (n - (len(names) - 1) / 2) * width for t in range(len(tasks))]
+            ys = [test[task]["models"].get(name, 0) for task in tasks]
+            ax.bar(xs, ys, width * 0.92, color=color, label=merged.get("names", {}).get(name, name))
+            for x, y in zip(xs, ys):
+                ax.text(x, y + 0.01, f"{y:.0%}", ha="center", fontsize=7, color=INK)
+        for t, task in enumerate(tasks):  # baselines: a short dark line across the group
+            for label, value in test[task]["baselines"].items():
+                ax.plot([t - 0.42, t + 0.42], [value, value], color=INK, linewidth=1.2, linestyle=":")
+                ax.text(t + 0.43, value, label, fontsize=7, color=MUTED, va="center")
+        ax.set_xticks(range(len(tasks)), [NAMES.get(t, t) for t in tasks])
+        ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0))
+        ax.set(ylim=(0, 1.1), ylabel="test accuracy (all options)", title="Benchmark · every Rhoa on held-out test data")
+        ax.grid(axis="x", visible=False)
+        ax.legend(fontsize=8, ncol=3, loc="upper center", bbox_to_anchor=(0.5, -0.12))
+        save(fig, args.out, "benchmark.png")
+
     merged["validation"] = results
     with open(path, "w") as f:
         json.dump(merged, f, indent=2)

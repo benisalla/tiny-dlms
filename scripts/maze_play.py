@@ -58,7 +58,7 @@ def evaluate(choose, mazes):
 def draw_frame(walls, player, goal, move, probs, n_maze, title="Mēlon plays the maze"):
     """The board on the left (large), the 4 moves with their probabilities on the right."""
     from PIL import Image, ImageDraw
-    font, big = video.load_font(18), video.load_font(24)
+    font, big = video.load_font(20), video.load_font(26)
     img = Image.new("RGB", (900, 450), (18, 18, 24))
     board = maze.render(walls, player, goal).permute(1, 2, 0).numpy()
     img.paste(Image.fromarray(board).resize((432, 432), Image.NEAREST), (9, 9))

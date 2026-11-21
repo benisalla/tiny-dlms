@@ -29,7 +29,7 @@ W, H, FPS = 960, 540, 25
 def draw(task, decision, probs, grow, reveal, shown=8):
     """One frame. grow in [0, 1]: how far the bars have grown. reveal: show the pick and the right answer."""
     from PIL import Image, ImageDraw
-    small, font, big = video.load_font(16), video.load_font(20), video.load_font(26)
+    small, font, big = video.load_font(18), video.load_font(22), video.load_font(30)
     img = Image.new("RGB", (W, H), (18, 18, 24))
     d = ImageDraw.Draw(img)
     d.text((30, 20), "Rhoa decides", font=big, fill=(255, 214, 90))
@@ -48,9 +48,14 @@ def draw(task, decision, probs, grow, reveal, shown=8):
         if reveal and j == pick:
             color = (80, 200, 120) if right else (220, 80, 80)
         d.rectangle((30, y, 30 + int(320 * p * grow), y + 22), fill=color)
-        label = option + ("   ✓ right answer" if reveal and right else "")
+        label = option + ("  · right answer" if reveal and right else "")
         d.text((370, y + 2), label, font=font, fill=(255, 255, 255) if reveal and (j == pick or right) else (170, 170, 185))
-        d.text((36 + int(320 * p * grow), y + 2), f"{p:.0%}" if p * grow >= 0.04 else "", font=small, fill=(230, 230, 235))
+        # the percentage sits inside a long bar (dark on light) or just after a short one: never on the option names
+        width = int(320 * p * grow)
+        if p * grow >= 0.15:
+            d.text((36, y + 1), f"{p:.0%}", font=small, fill=(18, 18, 24))
+        elif p * grow >= 0.04:
+            d.text((36 + width, y + 1), f"{p:.0%}", font=small, fill=(230, 230, 235))
         y += 32
     if len(decision.candidates) > shown:
         d.text((370, y + 2), f"... and {len(decision.candidates) - shown} more options", font=small, fill=(120, 120, 135))

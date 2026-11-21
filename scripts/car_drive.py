@@ -73,7 +73,7 @@ def draw_frame(frame, j, probs, score, title="Mēlon drives"):
             └──────────────┴──────────────────────────────────────┘
     """
     from PIL import Image, ImageDraw
-    font, big = video.load_font(15), video.load_font(22)
+    font, big = video.load_font(17), video.load_font(24)
     if not big.getmask("ē").getbbox():  # the built-in font has no "ē"
         title = title.replace("ē", "e")
     img = Image.new("RGB", (900, 450), (18, 18, 24))
@@ -85,10 +85,11 @@ def draw_frame(frame, j, probs, score, title="Mēlon drives"):
         y = 58 + n * 25
         p = float(probs[n]) if probs is not None else float(n == j)
         chosen = n == j
-        draw.rectangle((470, y, 470 + int(150 * p), y + 18), fill=(80, 200, 120) if chosen else (90, 110, 160))
-        draw.text((630, y + 1), text, font=font, fill=(255, 255, 255) if chosen else (150, 150, 165))
-        if probs is not None:
-            draw.text((470 + int(150 * p) + 4, y + 1), f"{p:.0%}" if p >= 0.05 else "", font=font, fill=(220, 220, 230))
+        draw.rectangle((470, y, 470 + int(120 * p), y + 20), fill=(80, 200, 120) if chosen else (90, 110, 160))
+        draw.text((600, y), text, font=font, fill=(255, 255, 255) if chosen else (150, 150, 165))
+        if probs is not None and p >= 0.05:  # inside a long bar, just after a short one: never on the option names
+            draw.text((474, y) if p >= 0.4 else (474 + int(120 * p), y), f"{p:.0%}", font=font,
+                      fill=(18, 18, 24) if p >= 0.4 else (220, 220, 230))
     return img
 
 

@@ -42,7 +42,7 @@ class WTokenizer:
     """
 
     def __init__(self, itos):
-        assert itos[:len(SPECIALS)] == SPECIALS, "the special tokens must come first"
+        assert itos[:len(SPECIALS)] == SPECIALS, "the special tokens must come first" # just for clarity hhhh not necessary
         self.itos = list(itos)
         self.stoi = {w: i for i, w in enumerate(self.itos)}
         self.pad_id, self.unk_id, self.cls_id, self.sep_id, self.mask_id = (self.stoi[t] for t in SPECIALS)
@@ -53,7 +53,7 @@ class WTokenizer:
         The vocabulary: every word seen at least `min_freq` times in `texts`, plus every word of `keep`
         (the option texts: a word that can be an answer must never become <unk>, however rare it is).
         """
-        counts = Counter(w for text in texts for w in cls.split(text))
+        counts = Counter(w for text in texts for w in cls.split(text))  # to keep it simple we don't care about rare words hhhh
         words = {w for w, n in counts.items() if n >= min_freq} | {w for text in keep for w in cls.split(text)}
         return cls(SPECIALS + sorted(words - set(SPECIALS)))  # sorted -> same ids every run
 
@@ -70,7 +70,9 @@ class WTokenizer:
     def decode(self, ids):
         return " ".join(self.itos[i] for i in ids if i != self.pad_id)
 
-    def encode_pair(self, context, candidate):
+    def encode_pair(self, context, candidate):  
+        # Format a context–candidate pair for a decision model/reranker.
+        # Not needed for ordinary single-sequence language-model generation.
         return [self.cls_id] + self.encode(context) + [self.sep_id] + self.encode(candidate)
 
     def to_dict(self):
@@ -192,6 +194,8 @@ class BPETokenizer:
         return [i for chunk in self.split(text) for i in self.encode_chunk(chunk)]
 
     def encode_pair(self, context, candidate):
+        # Format a context–candidate pair for a decision model/reranker.
+        # Not needed for ordinary single-sequence language-model generation.
         return [self.cls_id] + self.encode(context) + [self.sep_id] + self.encode(candidate)
 
     def decode(self, ids):

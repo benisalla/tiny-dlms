@@ -125,14 +125,34 @@ bash scripts/web_pretrain_all.sh                  # every version pre-trained on
 .venv/bin/pytest                                  # tests
 ```
 
-Or skip training: every trained model is in the
-[models-v1 release](https://github.com/benisalla/tiny-dlms/releases/tag/models-v1). Each `.pt` holds the weights,
-the config and the tokenizer.
+Or skip training. The main models are on Hugging Face, in the
+[tiny-dlms collection](https://huggingface.co/benisalla) (`model.safetensors`, `config.json`, `tokenizer.json` and a
+model card each):
+
+| Hugging Face | |
+|---|---|
+| [benisalla/tiny-dlms-rhoa](https://huggingface.co/benisalla/tiny-dlms-rhoa) | the best Rhoa (web pre-training, then fine-tuning) |
+| [benisalla/tiny-dlms-rhoa-small](https://huggingface.co/benisalla/tiny-dlms-rhoa-small) | Rhoa 2x64 |
+| [benisalla/tiny-dlms-rhoa-gpt2](https://huggingface.co/benisalla/tiny-dlms-rhoa-gpt2) | Rhoa with GPT-2 blocks |
+| [benisalla/tiny-dlms-rhoa-base](https://huggingface.co/benisalla/tiny-dlms-rhoa-base) | Rhoa pre-trained only (masked tokens) |
+| [benisalla/tiny-dlms-melon-car](https://huggingface.co/benisalla/tiny-dlms-melon-car) | Mēlon driving CarRacing |
+| [benisalla/tiny-dlms-melon-car-small](https://huggingface.co/benisalla/tiny-dlms-melon-car-small) | Mēlon 2x64 driving |
+| [benisalla/tiny-dlms-melon-maze](https://huggingface.co/benisalla/tiny-dlms-melon-maze) | Mēlon solving mazes |
+
+```python
+from tiny_dlm.hub import from_pretrained
+model, tokenizer, config = from_pretrained("benisalla/tiny-dlms-rhoa")   # pip install huggingface_hub safetensors
+```
+
+Every checkpoint, including the twins and ablations of the benchmark, is also in the
+[models-v1 GitHub release](https://github.com/benisalla/tiny-dlms/releases/tag/models-v1) as training checkpoints
+(`.pt`: weights, config and tokenizer).
 
 ```bash
-python scripts/download_models.py                 # every model into checkpoints/ (~500 MB)
+python scripts/download_models.py                 # every checkpoint into checkpoints/ (~500 MB)
 python scripts/download_models.py rhoa_web2.pt    # only the best Rhoa
-bash scripts/publish_models.sh                    # (maintainer) upload checkpoints/ as a release
+python scripts/publish_hf.py --public             # (maintainer) the main models -> Hugging Face
+bash scripts/publish_models.sh                    # (maintainer) checkpoints/ -> a GitHub release
 ```
 
 Ask a trained model:
@@ -164,7 +184,8 @@ picked automatically: CUDA, then MPS, then CPU. `notebooks/Tiny_DLM(Training).ip
 | `scripts/sanity_check.py`, `car_sanity_check.py`, `maze_sanity_check.py` | health checks before training |
 | `scripts/car_record.py`, `car_train.py`, `car_drive.py` | record the teacher, train Mēlon, drive |
 | `scripts/maze_train.py`, `maze_play.py` | train and play the maze |
-| `scripts/publish_models.sh`, `download_models.py` | upload the trained models as a GitHub release, download them |
+| `scripts/publish_hf.py`, `tiny_dlm/hub.py` | the main models on Hugging Face: publish, `from_pretrained` |
+| `scripts/publish_models.sh`, `download_models.py` | every checkpoint as a GitHub release: upload, download |
 | `scripts/*.sh` | the training pipelines (`QUICK=1` for a fast end-to-end check) |
 | `scripts/evaluate_all.py`, `plot_metrics.py` | the benchmark and the plots |
 | `scripts/rhoa_demo.py`, `export_web.py`, `build_notebook.py` | demo video, web demo, notebook |

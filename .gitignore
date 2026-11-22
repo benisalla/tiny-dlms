@@ -17,3 +17,5 @@ data/car/
 logs/
 # built by scripts/prepare_web.py (gigabytes of text and token files): data/web, data/web2, ...
 data/web*/
+# built by scripts/publish_hf.py (the Hugging Face folders)
+hf/

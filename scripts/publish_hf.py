@@ -3,7 +3,7 @@ Publish the main models to the Hugging Face Hub, one repo per model, with a mode
 collection. The other checkpoints (ablations, twins) stay in the GitHub release (scripts/publish_models.sh).
 
     hf auth login                                  # once (a token with write access)
-    python scripts/publish_hf.py --public          # every model below -> benisalla/tiny-dlms-<name>
+    python scripts/publish_hf.py --public          # every model below -> liamsi/tiny-dlms-<name>
     python scripts/publish_hf.py --names rhoa --dry_run   # only write the folder in hf/, upload nothing
 
 Each repo gets model.safetensors, config.json, tokenizer.json and README.md (the card: what it does, usage,
@@ -19,6 +19,7 @@ sys.path.insert(0, ROOT)
 
 from tiny_dlm.hub import save_pretrained  # noqa: E402
 
+OWNER = "liamsi"  # the Hugging Face account
 GITHUB = "https://github.com/benisalla/tiny-dlms"
 SITE = "https://benisalla.github.io/tiny-dlms/"
 TASKS = [("babi", "bAbI"), ("clinc150", "CLINC150"), ("banking77", "Banking77"), ("csqa", "CommonsenseQA")]
@@ -56,7 +57,7 @@ from tiny_dlm.hub import from_pretrained
 
 model, tokenizer, config = from_pretrained("{repo_id}")
 # a base model, not fine-tuned: model.encode(idx) gives one vector per token,
-# model.mlm_head scores the hidden tokens. For decisions use benisalla/tiny-dlms-rhoa.
+# model.mlm_head scores the hidden tokens. For decisions use {OWNER}/tiny-dlms-rhoa.
 ```"""
     if config["kind"] == "rhoa":
         return f"""```bash
@@ -121,7 +122,7 @@ def results(name, ckpt, results_json):
     test = results_json.get("test", {})
     if name == "rhoa-base":
         return ("Pre-training only: it guesses 47.7% of the hidden tokens of held-out web text. The fine-tuned "
-                "version, [tiny-dlms-rhoa](https://huggingface.co/benisalla/tiny-dlms-rhoa), reaches 100% on bAbI.")
+                f"version, [tiny-dlms-rhoa](https://huggingface.co/{OWNER}/tiny-dlms-rhoa), reaches 100% on bAbI.")
     if name.startswith("rhoa"):
         rows = ["| Dataset (held-out test) | Options | This model | Random |", "|---|---|---|---|"]
         for key, label in TASKS:
@@ -232,7 +233,7 @@ A learning project, not a production model.
 
 | Model | |
 |---|---|
-""" + "\n".join(f"| [tiny-dlms-{n}](https://huggingface.co/benisalla/tiny-dlms-{n}) | {MODELS[n][2]} |"
+""" + "\n".join(f"| [tiny-dlms-{n}](https://huggingface.co/{OWNER}/tiny-dlms-{n}) | {MODELS[n][2]} |"
                 for n in MODELS) + "\n"
 
 
@@ -240,7 +241,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--checkpoints", default=os.path.join(ROOT, "checkpoints"))
     p.add_argument("--names", default=",".join(MODELS))
-    p.add_argument("--owner", default="benisalla")
+    p.add_argument("--owner", default=OWNER)
     p.add_argument("--public", action="store_true", help="public repos (default: private)")
     p.add_argument("--license", default="mit")
     p.add_argument("--out", default=os.path.join(ROOT, "hf"), help="the folders that are uploaded")

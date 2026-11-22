@@ -126,22 +126,22 @@ bash scripts/web_pretrain_all.sh                  # every version pre-trained on
 ```
 
 Or skip training. The main models are on Hugging Face, in the
-[tiny-dlms collection](https://huggingface.co/benisalla) (`model.safetensors`, `config.json`, `tokenizer.json` and a
+[tiny-dlms collection](https://huggingface.co/collections/liamsi/tiny-dlms-6b0318fb71c703296d0b0a50) (`model.safetensors`, `config.json`, `tokenizer.json` and a
 model card each):
 
 | Hugging Face | |
 |---|---|
-| [benisalla/tiny-dlms-rhoa](https://huggingface.co/benisalla/tiny-dlms-rhoa) | the best Rhoa (web pre-training, then fine-tuning) |
-| [benisalla/tiny-dlms-rhoa-small](https://huggingface.co/benisalla/tiny-dlms-rhoa-small) | Rhoa 2x64 |
-| [benisalla/tiny-dlms-rhoa-gpt2](https://huggingface.co/benisalla/tiny-dlms-rhoa-gpt2) | Rhoa with GPT-2 blocks |
-| [benisalla/tiny-dlms-rhoa-base](https://huggingface.co/benisalla/tiny-dlms-rhoa-base) | Rhoa pre-trained only (masked tokens) |
-| [benisalla/tiny-dlms-melon-car](https://huggingface.co/benisalla/tiny-dlms-melon-car) | Mēlon driving CarRacing |
-| [benisalla/tiny-dlms-melon-car-small](https://huggingface.co/benisalla/tiny-dlms-melon-car-small) | Mēlon 2x64 driving |
-| [benisalla/tiny-dlms-melon-maze](https://huggingface.co/benisalla/tiny-dlms-melon-maze) | Mēlon solving mazes |
+| [liamsi/tiny-dlms-rhoa](https://huggingface.co/liamsi/tiny-dlms-rhoa) | the best Rhoa (web pre-training, then fine-tuning) |
+| [liamsi/tiny-dlms-rhoa-small](https://huggingface.co/liamsi/tiny-dlms-rhoa-small) | Rhoa 2x64 |
+| [liamsi/tiny-dlms-rhoa-gpt2](https://huggingface.co/liamsi/tiny-dlms-rhoa-gpt2) | Rhoa with GPT-2 blocks |
+| [liamsi/tiny-dlms-rhoa-base](https://huggingface.co/liamsi/tiny-dlms-rhoa-base) | Rhoa pre-trained only (masked tokens) |
+| [liamsi/tiny-dlms-melon-car](https://huggingface.co/liamsi/tiny-dlms-melon-car) | Mēlon driving CarRacing |
+| [liamsi/tiny-dlms-melon-car-small](https://huggingface.co/liamsi/tiny-dlms-melon-car-small) | Mēlon 2x64 driving |
+| [liamsi/tiny-dlms-melon-maze](https://huggingface.co/liamsi/tiny-dlms-melon-maze) | Mēlon solving mazes |
 
 ```python
 from tiny_dlm.hub import from_pretrained
-model, tokenizer, config = from_pretrained("benisalla/tiny-dlms-rhoa")   # pip install huggingface_hub safetensors
+model, tokenizer, config = from_pretrained("liamsi/tiny-dlms-rhoa")   # pip install huggingface_hub safetensors
 ```
 
 Every checkpoint, including the twins and ablations of the benchmark, is also in the

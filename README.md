@@ -125,6 +125,16 @@ bash scripts/web_pretrain_all.sh                  # every version pre-trained on
 .venv/bin/pytest                                  # tests
 ```
 
+Or skip training: every trained model is in the
+[models-v1 release](https://github.com/benisalla/tiny-dlms/releases/tag/models-v1). Each `.pt` holds the weights,
+the config and the tokenizer.
+
+```bash
+python scripts/download_models.py                 # every model into checkpoints/ (~500 MB)
+python scripts/download_models.py rhoa_web2.pt    # only the best Rhoa
+bash scripts/publish_models.sh                    # (maintainer) upload checkpoints/ as a release
+```
+
 Ask a trained model:
 
 ```bash
@@ -154,6 +164,7 @@ picked automatically: CUDA, then MPS, then CPU. `notebooks/Tiny_DLM(Training).ip
 | `scripts/sanity_check.py`, `car_sanity_check.py`, `maze_sanity_check.py` | health checks before training |
 | `scripts/car_record.py`, `car_train.py`, `car_drive.py` | record the teacher, train Mēlon, drive |
 | `scripts/maze_train.py`, `maze_play.py` | train and play the maze |
+| `scripts/publish_models.sh`, `download_models.py` | upload the trained models as a GitHub release, download them |
 | `scripts/*.sh` | the training pipelines (`QUICK=1` for a fast end-to-end check) |
 | `scripts/evaluate_all.py`, `plot_metrics.py` | the benchmark and the plots |
 | `scripts/rhoa_demo.py`, `export_web.py`, `build_notebook.py` | demo video, web demo, notebook |

@@ -80,7 +80,7 @@
     <h1>Little models that <em>choose</em>.</h1>
     <p class="lead">An LLM is a <strong>writer</strong>: it invents an answer word by word. A decision model is a
       <strong>judge</strong>: you give it the situation <em>and the options</em>, it gives every option a score, and
-      the best one wins. Everything here is written from scratch in PyTorch, small enough to train on a laptop.</p>
+      the best one wins. Everything here is written from scratch in PyTorch, small enough to train in a few hours.</p>
     <div class="cards">
       <div class="card">
         <div class="name">Rhoa</div>
@@ -96,16 +96,6 @@
           the next move.</p>
       </div>
     </div>
-  </section>
-
-  <section>
-    <h2>How a judge works</h2>
-    <p class="muted">Each option is glued to the situation and read on its own by the same Transformer. Every option
-      becomes one number; a softmax over the options turns them into probabilities. No layer knows how many options
-      there are, so the same model picks among 2 or 151.</p>
-<pre>[CLS] mary went to the garden . where is mary ? [SEP] garden    ─┐
-[CLS] mary went to the garden . where is mary ? [SEP] kitchen   ─┼─▶  encoder ─▶ one score each ─▶ softmax ─▶ garden 0.97
-[CLS] mary went to the garden . where is mary ? [SEP] office    ─┘                                          kitchen 0.02 …</pre>
   </section>
 
   <section id="try">
@@ -170,15 +160,13 @@
   <section>
     <h2>Run it yourself</h2>
 <pre>git clone https://github.com/benisalla/tiny-dlms && cd tiny-dlms
-pip install -e ".[test,car]"
+pip install -e ".[test,car,web]"
 python scripts/prepare_data.py         # the datasets
 bash scripts/train_all.sh              # sanity checks, then every model, with logs and graphs
 python scripts/car_drive.py --video melon.mp4</pre>
-    <p class="muted">Read the docs: <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/01-overview.md">overview</a> ·
-      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/02-data.md">data</a> ·
-      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/03-encoder.md">encoder</a> ·
-      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/04-decision-head.md">decision head</a> ·
-      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/05-training.md">training</a></p>
+    <p class="muted">How each model is built: <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/rhoa.md">Rhoa</a> ·
+      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/melon.md">Mēlon</a> ·
+      <a href="https://github.com/benisalla/tiny-dlms/blob/main/docs/02-data.md">the data</a></p>
   </section>
 
   <footer>tiny-dlms · a learning project · data: bAbI, CLINC150 (CC BY 3.0), Banking77 (CC BY 4.0), CommonsenseQA, CarRacing (Gymnasium)</footer>
@@ -284,6 +272,8 @@ async function start() {
     else meta.stoi = Object.fromEntries(meta.vocab.map((w, i) => [w, i]));
     session = await ort.InferenceSession.create("demo/rhoa.onnx");
     tabs(); next();
+    // a question typed by the visitor has no known answer: forget the example's answer as soon as it is edited
+    for (const id of ["context", "options"]) $(id).addEventListener("input", () => { $("options").dataset.answers = "[]"; });
     for (const [text, ids] of Object.entries(meta.tokenizer_checks || {}))  // the JS tokenizer = the Python one
       if (encode(text).join() !== ids.join()) console.warn("tokenizer differs from Python on:", text);
     $("status").textContent = "Rhoa is ready.";

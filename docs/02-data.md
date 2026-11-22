@@ -1,6 +1,6 @@
-# 2. Data: what the model reads in each stage
+# Data: what the models read
 
-[← 1. Overview](01-overview.md) · next: [3. Encoder →](03-encoder.md)
+[← README](../README.md) · [Rhoa](rhoa.md) · [Mēlon](melon.md)
 
 Rhoa learns in two stages, from two different kinds of data:
 

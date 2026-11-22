@@ -56,14 +56,29 @@
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 600; }
   label { display: block; font-size: 0.85rem; color: var(--ink-2); margin: 12px 0 4px; }
   textarea { width: 100%; min-height: 70px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg); color: var(--ink); font: inherit; resize: vertical; }
-  .bars { margin-top: 16px; display: grid; gap: 6px; }
-  .bar { display: grid; grid-template-columns: minmax(120px, 2fr) 3fr 52px; gap: 10px; align-items: center; font-size: 0.92rem; }
-  .bar .track { height: 18px; background: var(--line); border-radius: 4px; overflow: hidden; }
-  .bar .fill { height: 100%; width: 0; background: var(--blue); border-radius: 4px; transition: width 0.6s ease; }
-  .bar.pick .fill { background: var(--good); }
-  .bar.pick.wrong .fill { background: var(--bad); }
+  .btn:disabled { opacity: 0.6; cursor: progress; }
+  .btn.primary { display: inline-flex; align-items: center; gap: 8px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: none; animation: spin 0.7s linear infinite; }
+  .busy .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .bars { margin-top: 16px; display: grid; gap: 8px; }
+  .bar { display: grid; grid-template-columns: minmax(110px, 2fr) 3fr 56px; gap: 12px; align-items: center; font-size: 0.92rem; animation: rise 0.35s ease both; }
+  .bar .track { display: block; height: 20px; background: color-mix(in srgb, var(--line) 70%, transparent); border-radius: 999px; overflow: hidden; }
+  .bar .fill { display: block; height: 100%; width: 0; min-width: 6px; border-radius: 999px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 55%, transparent), var(--blue));
+    transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+  .bar.pick .fill { background: linear-gradient(90deg, color-mix(in srgb, var(--good) 55%, transparent), var(--good)); }
+  .bar.pick.wrong .fill { background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 55%, transparent), var(--bad)); }
+  .bar.right:not(.pick) .fill { background: linear-gradient(90deg, color-mix(in srgb, var(--good) 40%, transparent), color-mix(in srgb, var(--good) 75%, transparent)); }
+  .bar .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .bar.pick .opt, .bar.pick .num { font-weight: 700; color: var(--ink); }
   .bar .opt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar.right .opt::after { content: " ✓"; color: var(--good); }
+  .bar.skeleton .opt { display: block; height: 12px; width: 60%; border-radius: 999px; }
+  .bar.skeleton .track, .bar.skeleton .opt { background: linear-gradient(90deg, var(--line) 0%, color-mix(in srgb, var(--line) 40%, var(--surface)) 50%, var(--line) 100%); background-size: 200% 100%; animation: shimmer 1.1s linear infinite; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .bar, .bar .fill, .spinner, .bar.skeleton .track, .bar.skeleton .opt { animation: none; transition: none; } }
   .status { margin-top: 10px; font-size: 0.9rem; color: var(--muted); min-height: 1.4em; }
   footer { margin-top: 80px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--line); padding-top: 20px; }
   .scroll { overflow-x: auto; max-width: 100%; }
@@ -105,14 +120,14 @@
     <div class="demo">
       <div class="tabs" id="tabs"></div>
       <label for="context">Situation / question</label>
-      <textarea id="context"></textarea>
+      <textarea id="context" style="min-height:110px"></textarea>
       <label for="options">Options (one per line)</label>
-      <textarea id="options" style="min-height:110px"></textarea>
+      <textarea id="options" style="min-height:130px"></textarea>
       <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap">
-        <button class="btn primary" id="decide">Let Rhoa decide</button>
-        <button class="btn" id="another">Another example</button>
+        <button class="btn primary" id="decide" disabled><span class="spinner" aria-hidden="true"></span><span class="label">Let Rhoa decide</span></button>
+        <button class="btn" id="another" disabled>Another example</button>
       </div>
-      <div class="status" id="status">Loading Rhoa…</div>
+      <div class="status" id="status" aria-live="polite">Loading Rhoa…</div>
       <div class="bars" id="bars"></div>
     </div>
   </section>
@@ -213,7 +228,9 @@ function show(example) {
   $("options").value = example.options.join("\n");
   $("options").dataset.answers = JSON.stringify(example.answers || []);
   $("bars").innerHTML = "";
+  for (const id of ["context", "options"]) fit($(id));
 }
+function fit(t) { t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight + 2, 320) + "px"; }
 
 function tabs() {
   $("tabs").innerHTML = "";
@@ -232,37 +249,74 @@ function next() {
   show(list[count[task]]);
 }
 
+let busy = false;
+function setBusy(on, k) {
+  busy = on;
+  $("decide").disabled = $("another").disabled = on;
+  $("decide").classList.toggle("busy", on);
+  $("decide").querySelector(".label").textContent = on ? "Rhoa is thinking…" : "Let Rhoa decide";
+  if (on) {  // shimmering placeholder bars while the model runs
+    $("status").textContent = `Reading the situation and weighing ${k} options…`;
+    $("bars").innerHTML = "";
+    for (let j = 0; j < Math.min(k, 10); j++) {
+      const row = document.createElement("div");
+      row.className = "bar skeleton";
+      row.innerHTML = `<span class="opt"></span><span class="track"></span><span class="num"></span>`;
+      $("bars").appendChild(row);
+    }
+  }
+}
+const pct = (p) => (p >= 0.995 ? "100%" : p >= 0.095 ? (p * 100).toFixed(0) + "%" : p >= 0.001 ? (p * 100).toFixed(1) + "%" : "<0.1%");
+
 async function decide() {
+  if (busy || !session) return;
   const context = $("context").value.trim();
   const options = $("options").value.split("\n").map((s) => s.trim()).filter(Boolean);
   if (!context || options.length < 2) { $("status").textContent = "Write a situation and at least two options."; return; }
-  // one "[CLS] context [SEP] option" sequence per option, padded to the same length s
-  const ctx = encode(context);
-  const seqs = options.map((o) => [meta.cls_id, ...ctx, meta.sep_id, ...encode(o)].slice(0, meta.block_size));
-  const k = seqs.length, s = Math.max(...seqs.map((q) => q.length));
-  const idx = new BigInt64Array(k * s).fill(BigInt(meta.pad_id));
-  seqs.forEach((q, j) => q.forEach((id, m) => { idx[j * s + m] = BigInt(id); }));
+  const k = options.length;
+  setBusy(true, k);
+  // let the browser paint the spinner before the model takes the main thread
+  await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
   const t0 = performance.now();
-  const out = await session.run({
-    idx: new ort.Tensor("int64", idx, [1, k, s]),
-    cand_mask: new ort.Tensor("bool", new Uint8Array(k).fill(1), [1, k]),
-  });
-  const probs = Array.from(out.probs.data);
-  const answers = JSON.parse($("options").dataset.answers || "[]");
-  const order = probs.map((p, j) => j).sort((a, b) => probs[b] - probs[a]).slice(0, 10);
-  const pick = order[0];
-  $("bars").innerHTML = "";
-  for (const j of order) {
-    const row = document.createElement("div");
-    const right = answers.includes(options[j]);
-    row.className = "bar" + (j === pick ? " pick" : "") + (j === pick && answers.length && !right ? " wrong" : "") + (right ? " right" : "");
-    row.innerHTML = `<span class="opt"></span><span class="track"><span class="fill"></span></span><span class="num">${(probs[j] * 100).toFixed(0)}%</span>`;
-    row.querySelector(".opt").textContent = options[j];
-    $("bars").appendChild(row);
-    requestAnimationFrame(() => { row.querySelector(".fill").style.width = (probs[j] * 100).toFixed(1) + "%"; });
+  try {
+    // one "[CLS] context [SEP] option" sequence per option, padded to the same length s
+    const ctx = encode(context);
+    const seqs = options.map((o) => [meta.cls_id, ...ctx, meta.sep_id, ...encode(o)].slice(0, meta.block_size));
+    const s = Math.max(...seqs.map((q) => q.length));
+    const idx = new BigInt64Array(k * s).fill(BigInt(meta.pad_id));
+    seqs.forEach((q, j) => q.forEach((id, m) => { idx[j * s + m] = BigInt(id); }));
+    const out = await session.run({
+      idx: new ort.Tensor("int64", idx, [1, k, s]),
+      cand_mask: new ort.Tensor("bool", new Uint8Array(k).fill(1), [1, k]),
+    });
+    const ms = performance.now() - t0;
+    // the model is often faster than a blink: keep the "thinking" state up long enough to be seen
+    await new Promise((r) => setTimeout(r, Math.max(0, 650 - ms)));
+    const probs = Array.from(out.probs.data);
+    const answers = JSON.parse($("options").dataset.answers || "[]");
+    const order = probs.map((p, j) => j).sort((a, b) => probs[b] - probs[a]).slice(0, 10);
+    const pick = order[0];
+    setBusy(false);
+    $("bars").innerHTML = "";
+    order.forEach((j, n) => {
+      const row = document.createElement("div");
+      const right = answers.includes(options[j]);
+      row.className = "bar" + (j === pick ? " pick" : "") + (j === pick && answers.length && !right ? " wrong" : "") + (right ? " right" : "");
+      row.style.animationDelay = n * 40 + "ms";
+      row.innerHTML = `<span class="opt"></span><span class="track"><span class="fill"></span></span><span class="num">${pct(probs[j])}</span>`;
+      row.querySelector(".opt").textContent = options[j];
+      row.querySelector(".opt").title = options[j];
+      $("bars").appendChild(row);
+      const fill = row.querySelector(".fill");
+      requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = (probs[j] * 100).toFixed(1) + "%"; }));
+    });
+    const verdict = answers.length ? (answers.includes(options[pick]) ? " · right ✓" : ` · wrong (right answer: ${answers.join(" | ")})`) : "";
+    $("status").textContent = `Rhoa picked “${options[pick]}” among ${k} options in ${ms.toFixed(0)} ms${verdict}` + (k > 10 ? " · showing the top 10" : "");
+  } catch (e) {
+    setBusy(false);
+    $("bars").innerHTML = "";
+    $("status").textContent = "Rhoa could not run: " + e.message;
   }
-  const verdict = answers.length ? (answers.includes(options[pick]) ? " · right ✓" : ` · wrong (right answer: ${answers.join(" | ")})`) : "";
-  $("status").textContent = `Rhoa picked “${options[pick]}” among ${k} options in ${(performance.now() - t0).toFixed(0)} ms${verdict}` + (k > 10 ? " · showing the top 10" : "");
 }
 
 async function start() {
@@ -276,7 +330,8 @@ async function start() {
     for (const id of ["context", "options"]) $(id).addEventListener("input", () => { $("options").dataset.answers = "[]"; });
     for (const [text, ids] of Object.entries(meta.tokenizer_checks || {}))  // the JS tokenizer = the Python one
       if (encode(text).join() !== ids.join()) console.warn("tokenizer differs from Python on:", text);
-    $("status").textContent = "Rhoa is ready.";
+    $("decide").disabled = $("another").disabled = false;
+    $("status").textContent = "Rhoa is ready. Press “Let Rhoa decide”.";
   } catch (e) {
     $("status").textContent = "Could not load Rhoa: " + e.message;
   }
@@ -316,7 +371,7 @@ async function results() {
 }
 
 $("decide").onclick = decide;
-$("another").onclick = () => { next(); decide(); };
+$("another").onclick = () => { if (!busy) { next(); decide(); } };
 start(); results();
 </script>
 </body>
